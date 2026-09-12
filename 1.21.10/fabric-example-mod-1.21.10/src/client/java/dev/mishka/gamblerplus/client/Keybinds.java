@@ -1,0 +1,43 @@
+package dev.mishka.gamblerplus.client;
+
+import com.mojang.blaze3d.platform.InputConstants;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+
+public final class Keybinds {
+	public static KeyMapping openUi;
+	public static KeyMapping toggleGambling;
+	public static KeyMapping toggleHud;
+
+	private Keybinds() {}
+
+	public static void register(Config config, Runnable openScreen) {
+		openUi = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+				"key.gamblerplus.open",
+				InputConstants.Type.KEYSYM,
+				InputConstants.UNKNOWN.getValue(),
+				KeyMapping.Category.MISC));
+
+		toggleGambling = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+				"key.gamblerplus.toggle_mode",
+				InputConstants.Type.KEYSYM,
+				InputConstants.UNKNOWN.getValue(),
+				KeyMapping.Category.MISC));
+
+		toggleHud = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+				"key.gamblerplus.toggle_hud",
+				InputConstants.Type.KEYSYM,
+				InputConstants.UNKNOWN.getValue(),
+				KeyMapping.Category.MISC));
+
+		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+			while (openUi.consumeClick()) {
+				if (Minecraft.getInstance().mouseHandler.isMouseGrabbed()) openScreen.run();
+			}
+			while (toggleGambling.consumeClick()) config.toggleGamblingMode();
+			while (toggleHud.consumeClick())      config.toggleHudBar();
+		});
+	}
+}

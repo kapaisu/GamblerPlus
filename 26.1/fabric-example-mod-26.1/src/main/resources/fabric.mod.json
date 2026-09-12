@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "gamblerplus",
+	"version": "${version}",
+	"name": "Gambler Plus",
+	"description": "Tracks wins and losses from DonutSMP chat payments.",
+	"authors": [
+		"x/Mishka"
+	],
+	"license": "All Rights Reserved",
+	"icon": "assets/gamblerplus/textures/gui/donut.png",
+	"environment": "client",
+	"entrypoints": {
+		"main": [
+			"dev.mishka.gamblerplus.GamblerPlus"
+		],
+		"client": [
+			"dev.mishka.gamblerplus.client.GamblerPlusClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.2",
+		"minecraft": ">=26.1 <26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
