@@ -3,7 +3,10 @@ package dev.mishka.gamblerplus.client;
 import net.minecraft.util.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -233,6 +236,15 @@ public final class TrackerScreen extends Screen {
 		miniButton(ctx, "+", cursor, btnY, btnW, btnH, mx, my, HitId.STREAK_UP, canUp);
 	}
 
+	private void drawViewTab(GuiGraphics ctx, String label, int x, int y, int w, int h, boolean active, int mx, int my, HitId id) {
+		int fill = active ? Theme.SURFACE_ALT : Theme.SURFACE;
+		int edge = active ? Theme.BRAND : Theme.PANEL_LINE;
+		Theme.roundPanel(ctx, x, y, x + w, y + h, 3, fill, edge);
+		int lw = font.width(label);
+		ctx.drawString(font, label, x + (w - lw) / 2, y + (h - font.lineHeight) / 2 + 1, active ? Theme.BRAND : Theme.TEXT_MUTED, false);
+		hitboxes[id.ordinal()] = new int[]{x, y, x + w, y + h};
+	}
+
 	private void miniButton(GuiGraphics ctx, String label, int x, int y, int w, int h, int mx, int my, HitId id, boolean enabled) {
 		boolean hover = enabled && mx >= x && mx < x + w && my >= y && my < y + h;
 		ctx.fill(x, y, x + w, y + h, hover ? Theme.SURFACE_ALT : Theme.SURFACE);
@@ -245,18 +257,42 @@ public final class TrackerScreen extends Screen {
 
 	private void drawLog(GuiGraphics ctx, int mx, int my) {
 		int lx = px + 14;
-		int ly = py + 116;
 		int lw = PANEL_W - 28;
+
+		boolean graphMode = config.showGraph();
+		int headerY = py + 116;
+		String header = graphMode ? "SESSION GRAPH" : "RECENT PAYMENTS";
+		ctx.drawString(font, header, lx, headerY, Theme.TEXT_DIM, false);
+
+		int tabW = 44, tabH = 12;
+		int logTabX = lx + lw - tabW * 2 - 4;
+		int graphTabX = lx + lw - tabW;
+		int tabY = headerY - 2;
+		drawViewTab(ctx, "log", logTabX, tabY, tabW, tabH, !graphMode, mx, my, HitId.VIEW_LOG);
+		drawViewTab(ctx, "graph", graphTabX, tabY, tabW, tabH, graphMode, mx, my, HitId.VIEW_GRAPH);
+
+		int ly = headerY + 12;
 		int lh = 108;
 
-		ctx.drawString(font, "RECENT PAYMENTS", lx, ly, Theme.TEXT_DIM, false);
-		int listTop = ly + 12;
+		if (graphMode) {
+			List<PaymentEvent> snap = stats.snapshot();
+			long started = sessions.hasActive() ? sessions.currentStartedAt() : (snap.isEmpty() ? System.currentTimeMillis() - 1L : snap.get(snap.size() - 1).timestampMs());
+			long now = System.currentTimeMillis();
+			NetGraph.draw(ctx, font, lx, ly, lw, lh, snap, started, now, mx, my);
+			logRemoveHits.clear();
+			logRemoveRefs.clear();
+			return;
+		}
+		int listTop = ly;
 		int listBot = listTop + lh;
 		Theme.roundRect(ctx, lx, listTop, lx + lw, listBot, 4, Theme.SURFACE_ALT);
 		Theme.roundOutline(ctx, lx, listTop, lx + lw, listBot, 4, Theme.PANEL_LINE);
 
 		logRemoveHits.clear();
 		logRemoveRefs.clear();
+		payBackHits.clear();
+		payBackRefs.clear();
+		payBackPlayers.clear();
 
 		List<PaymentEvent> log = stats.snapshot();
 		if (log.isEmpty()) {
@@ -288,6 +324,27 @@ public final class TrackerScreen extends Screen {
 			int aw = font.width(amt);
 			int amtX = lx + lw - 20 - aw;
 			ctx.drawString(font, amt, amtX, rowY, dirColor, false);
+			String mult = Multiplier.labelFor(log, start + i);
+			if (mult != null) {
+				int mw = font.width(mult);
+				ctx.drawString(font, mult, amtX - mw - 4, rowY, Theme.WARN, false);
+			}
+			if (!e.incoming()) {
+				int px2 = amtX - 34;
+				int px3 = amtX - 18;
+				int py1 = rowY - 1;
+				int py2 = rowY + ROW_H - 3;
+				boolean h2 = mx >= px2 && mx < px2 + 14 && my >= py1 && my < py2;
+				boolean h3 = mx >= px3 && mx < px3 + 14 && my >= py1 && my < py2;
+				ctx.drawString(font, "2x", px2, rowY, h2 ? Theme.GAIN : Theme.BRAND, false);
+				ctx.drawString(font, "3x", px3, rowY, h3 ? Theme.GAIN : Theme.BRAND, false);
+				payBackHits.add(new int[]{px2, py1, px2 + 14, py2});
+				payBackRefs.add(new long[]{e.amount() * 2L});
+				payBackPlayers.add(e.player());
+				payBackHits.add(new int[]{px3, py1, px3 + 14, py2});
+				payBackRefs.add(new long[]{e.amount() * 3L});
+				payBackPlayers.add(e.player());
+			}
 
 			int xBtnX = lx + lw - 14;
 			int xBtnY = rowY - 1;
@@ -334,6 +391,12 @@ public final class TrackerScreen extends Screen {
 		int uY = row1Y - 1;
 		Widgets.flatButton(ctx, font, "useful", uX, uY, uW, uH, mx, my, Theme.BRAND);
 		hitboxes[HitId.OPEN_USEFUL.ordinal()] = new int[]{uX, uY, uX + uW, uY + uH};
+
+		int aW = 66, aH = 16;
+		int aX = uX - aW - 6;
+		int aY = row1Y - 1;
+		Widgets.flatButton(ctx, font, "all time", aX, aY, aW, aH, mx, my, Theme.BRAND);
+		hitboxes[HitId.OPEN_ALLTIME.ordinal()] = new int[]{aX, aY, aX + aW, aY + aH};
 	}
 
 	private void drawSessionsPanel(GuiGraphics ctx, int mx, int my) {
@@ -467,11 +530,19 @@ public final class TrackerScreen extends Screen {
 		contentY += 18;
 
 		int fieldH = 20;
-		Theme.roundRect(ctx, fieldX, contentY, fieldX + fieldW, contentY + fieldH, 3, Theme.SURFACE);
-		Theme.roundOutline(ctx, fieldX, contentY, fieldX + fieldW, contentY + fieldH, 3, Theme.PANEL_LINE);
-		String amt = AmountFormat.pretty(config.largePaymentThreshold());
-		int aw = font.width(amt);
-		ctx.drawString(font, amt, fieldX + (fieldW - aw) / 2, contentY + (fieldH - font.lineHeight) / 2, Theme.TEXT, false);
+		int boxFill = thresholdFocused ? Theme.SURFACE_ALT : Theme.SURFACE;
+		int boxEdge = thresholdFocused ? Theme.BRAND : Theme.PANEL_LINE;
+		Theme.roundPanel(ctx, fieldX, contentY, fieldX + fieldW, contentY + fieldH, 3, boxFill, boxEdge);
+		String shown = thresholdFocused ? thresholdText : AmountFormat.pretty(config.largePaymentThreshold());
+		int shownW = font.width(shown);
+		int shownX = fieldX + (fieldW - shownW) / 2;
+		int shownY = contentY + (fieldH - font.lineHeight) / 2;
+		ctx.drawString(font, shown, shownX, shownY, Theme.TEXT, false);
+		if (thresholdFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+			int caretX = shownX + shownW + 1;
+			ctx.fill(caretX, shownY - 1, caretX + 1, shownY + font.lineHeight, Theme.BRAND);
+		}
+		thresholdBoxRect = new int[]{fieldX, contentY, fieldX + fieldW, contentY + fieldH};
 		contentY += fieldH + 6;
 
 		int trackH = 8;
@@ -652,8 +723,11 @@ public final class TrackerScreen extends Screen {
 		STREAK_DOWN, STREAK_UP,
 		RAKEBACK_ENABLE, RATE_DOWN, RATE_UP, OPEN_RAKEBACK,
 		OPEN_USEFUL,
+		OPEN_ALLTIME,
 		OPEN_DISCORD,
-		ARROW_GAME
+		ARROW_GAME,
+		VIEW_LOG,
+		VIEW_GRAPH
 	}
 	private static final int DISCORD_BLURPLE = 0xFF5865F2;
 	private static final String DISCORD_URL = "https://discord.gg/YnMQRpExwj";
@@ -664,7 +738,13 @@ public final class TrackerScreen extends Screen {
 	private final java.util.List<Long> pastDeleteRefs = new java.util.ArrayList<>();
 	private final java.util.List<int[]> logRemoveHits = new java.util.ArrayList<>();
 	private final java.util.List<PaymentEvent> logRemoveRefs = new java.util.ArrayList<>();
+	private final java.util.List<int[]> payBackHits = new java.util.ArrayList<>();
+	private final java.util.List<long[]> payBackRefs = new java.util.ArrayList<>();
+	private final java.util.List<String> payBackPlayers = new java.util.ArrayList<>();
 	private boolean draggingThreshold = false;
+	private boolean thresholdFocused = false;
+	private String thresholdText = "";
+	private int[] thresholdBoxRect;
 
 	private void clearHitboxes() {
 		for (int i = 0; i < hitboxes.length; i++) hitboxes[i] = null;
@@ -684,6 +764,24 @@ public final class TrackerScreen extends Screen {
 				}
 				return true;
 			}
+		}
+		for (int i = 0; i < payBackHits.size(); i++) {
+			int[] h = payBackHits.get(i);
+			if (mx >= h[0] && mx < h[2] && my >= h[1] && my < h[3]) {
+				long amount = payBackRefs.get(i)[0];
+				String player = payBackPlayers.get(i);
+				Minecraft.getInstance().setScreenAndShow(new ChatScreen("/pay " + player + " " + amount, false));
+				return true;
+			}
+		}
+		if (thresholdBoxRect != null && mx >= thresholdBoxRect[0] && mx < thresholdBoxRect[2] && my >= thresholdBoxRect[1] && my < thresholdBoxRect[3]) {
+			thresholdFocused = true;
+			thresholdText = AmountFormat.pretty(config.largePaymentThreshold());
+			return true;
+		}
+		if (thresholdFocused) {
+			commitThreshold();
+			thresholdFocused = false;
 		}
 		int[] track = hitboxes[HitId.THRESHOLD_TRACK.ordinal()];
 		if (track != null && mx >= track[0] && mx < track[2] && my >= track[1] && my < track[3]) {
@@ -712,6 +810,9 @@ public final class TrackerScreen extends Screen {
 					case RATE_UP        -> config.stepRakebackPct(+1);
 					case OPEN_RAKEBACK  -> Minecraft.getInstance().setScreenAndShow(new RakebackScreen(config, sessions));
 					case OPEN_USEFUL    -> Minecraft.getInstance().setScreenAndShow(new UsefulScreen());
+					case OPEN_ALLTIME   -> Minecraft.getInstance().setScreenAndShow(new AllTimeScreen());
+					case VIEW_LOG       -> config.setShowGraph(false);
+					case VIEW_GRAPH     -> config.setShowGraph(true);
 					case OPEN_DISCORD   -> Util.getPlatform().openUri(URI.create(DISCORD_URL));
 					case ARROW_GAME     -> config.toggleArrowGameSupport();
 					case CURRENT_SESSION_DETAIL -> Minecraft.getInstance().setScreenAndShow(
@@ -737,6 +838,50 @@ public final class TrackerScreen extends Screen {
 			}
 		}
 		return super.mouseClicked(event, doubleClick);
+	}
+
+	private void commitThreshold() {
+		long parsed = AmountFormat.parse(thresholdText);
+		if (parsed <= 0) return;
+		long clamped = Math.max(Config.THRESHOLD_MIN, Math.min(Config.THRESHOLD_MAX, parsed));
+		config.setThreshold(clamped);
+	}
+
+	@Override
+	public boolean keyPressed(KeyEvent event) {
+		int key = event.key();
+		if (thresholdFocused) {
+			if (key == GLFW.GLFW_KEY_ESCAPE) {
+				thresholdFocused = false;
+				return true;
+			}
+			if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+				commitThreshold();
+				thresholdFocused = false;
+				return true;
+			}
+			if (key == GLFW.GLFW_KEY_BACKSPACE && !thresholdText.isEmpty()) {
+				thresholdText = thresholdText.substring(0, thresholdText.length() - 1);
+				return true;
+			}
+			return true;
+		}
+		return super.keyPressed(event);
+	}
+
+	@Override
+	public boolean charTyped(CharacterEvent event) {
+		if (!thresholdFocused) return false;
+		if (thresholdText.length() > 12) return true;
+		int cp = event.codepoint();
+		if (cp < 32 || cp >= 127) return false;
+		char c = (char) cp;
+		char up = Character.toUpperCase(c);
+		if (Character.isDigit(c) || c == '.' || c == ',' || up == 'K' || up == 'M' || up == 'B' || up == 'T') {
+			thresholdText += c;
+			return true;
+		}
+		return false;
 	}
 
 	private void seekThreshold(int mx, int[] track) {

@@ -22,6 +22,7 @@ public final class HudOverlay {
 		if (config.showToast()) drawToast(ctx, font, stats, sw);
 
 		HudLayout layout = config.hudLayout();
+		ImageHud.drawAll(ctx, font, layout, layout.editing);
 		AuctionHud.draw(ctx, font, layout, layout.editing);
 		TimerHud.draw(ctx, font, layout, layout.editing);
 		TextHud.drawAll(ctx, font, layout, layout.editing);

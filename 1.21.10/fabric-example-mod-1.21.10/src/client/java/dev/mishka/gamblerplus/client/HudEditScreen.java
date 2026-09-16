@@ -9,10 +9,11 @@ import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 public final class HudEditScreen extends Screen {
-	private enum TargetKind { NONE, AUCTION, TIMER, TEXT }
+	private enum TargetKind { NONE, AUCTION, TIMER, TEXT, IMAGE }
 
 	private TargetKind dragKind = TargetKind.NONE;
 	private int dragTextIndex = -1;
+	private int dragImageIndex = -1;
 	private int dragOffX, dragOffY;
 	private boolean prevMouseDown = false;
 
@@ -46,6 +47,7 @@ public final class HudEditScreen extends Screen {
 				dragOffX = mx - layout.timerX;
 				dragOffY = my - layout.timerY;
 			} else {
+				boolean grabbed = false;
 				for (int i = 0; i < layout.textEntries.size(); i++) {
 					HudLayout.TextEntry e = layout.textEntries.get(i);
 					int[] eR = TextHud.bounds(this.font, e);
@@ -54,7 +56,21 @@ public final class HudEditScreen extends Screen {
 						dragTextIndex = i;
 						dragOffX = mx - e.x;
 						dragOffY = my - e.y;
+						grabbed = true;
 						break;
+					}
+				}
+				if (!grabbed) {
+					for (int i = 0; i < layout.imageEntries.size(); i++) {
+						HudLayout.ImageEntry ie = layout.imageEntries.get(i);
+						int[] eR = ImageHud.bounds(ie);
+						if (inRect(mx, my, eR)) {
+							dragKind = TargetKind.IMAGE;
+							dragImageIndex = i;
+							dragOffX = mx - ie.x;
+							dragOffY = my - ie.y;
+							break;
+						}
 					}
 				}
 			}
@@ -76,16 +92,25 @@ public final class HudEditScreen extends Screen {
 						e.y = ny;
 					}
 				}
+				case IMAGE -> {
+					if (dragImageIndex >= 0 && dragImageIndex < layout.imageEntries.size()) {
+						HudLayout.ImageEntry ie = layout.imageEntries.get(dragImageIndex);
+						ie.x = nx;
+						ie.y = ny;
+					}
+				}
 				default -> {}
 			}
 		}
 		if (!down && dragKind != TargetKind.NONE) {
 			dragKind = TargetKind.NONE;
 			dragTextIndex = -1;
+			dragImageIndex = -1;
 			GamblerPlusClient.CONFIG.save();
 		}
 		prevMouseDown = down;
 
+		ImageHud.drawAll(ctx, font, layout, true);
 		AuctionHud.draw(ctx, font, layout, true);
 		TimerHud.draw(ctx, font, layout, true);
 		TextHud.drawAll(ctx, font, layout, true);
@@ -117,6 +142,14 @@ public final class HudEditScreen extends Screen {
 			int[] eR = TextHud.bounds(this.font, e);
 			if (inRect(mx, my, eR)) {
 				e.scale = HudLayout.clampScale(e.scale + step);
+				GamblerPlusClient.CONFIG.save();
+				return true;
+			}
+		}
+		for (HudLayout.ImageEntry ie : layout.imageEntries) {
+			int[] eR = ImageHud.bounds(ie);
+			if (inRect(mx, my, eR)) {
+				ie.scale = HudLayout.clampScale(ie.scale + step);
 				GamblerPlusClient.CONFIG.save();
 				return true;
 			}

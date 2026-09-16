@@ -80,6 +80,17 @@ public final class Stats {
 		return true;
 	}
 
+	public synchronized void reverseAllTime(PaymentEvent e) {
+		if (e == null) return;
+		if (e.incoming()) {
+			allTimeIn = Math.max(0, allTimeIn - e.amount());
+			allTimeInCount = Math.max(0, allTimeInCount - 1);
+		} else {
+			allTimeOut = Math.max(0, allTimeOut - e.amount());
+			allTimeOutCount = Math.max(0, allTimeOutCount - 1);
+		}
+	}
+
 	public synchronized void resetSession() {
 		sessionIn = sessionOut = 0;
 		sessionInCount = sessionOutCount = 0;

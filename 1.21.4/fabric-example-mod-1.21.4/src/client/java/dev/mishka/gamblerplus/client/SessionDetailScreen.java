@@ -190,9 +190,10 @@ public final class SessionDetailScreen extends Screen {
 			if (isExpanded) {
 				List<PaymentEvent> sorted = new ArrayList<>(events);
 				sorted.sort(Comparator.comparingLong(PaymentEvent::timestampMs).reversed());
-				for (PaymentEvent p : sorted) {
+				for (int pi = 0; pi < sorted.size(); pi++) {
+					PaymentEvent p = sorted.get(pi);
 					if (drawY + PAYMENT_ROW_H > listTop && drawY < listBot) {
-						drawPaymentRow(ctx, drawY, p);
+						drawPaymentRow(ctx, drawY, p, sorted, pi);
 						if (live) drawRemoveButton(ctx, drawY, p, mx, my);
 					}
 					if (live) {
@@ -244,7 +245,7 @@ public final class SessionDetailScreen extends Screen {
 		ctx.drawString(font, AmountFormat.signed(net), listX + 252, y + (PLAYER_ROW_H - font.lineHeight) / 2 + 1, Theme.color(net), false);
 	}
 
-	private void drawPaymentRow(GuiGraphics ctx, int y, PaymentEvent p) {
+	private void drawPaymentRow(GuiGraphics ctx, int y, PaymentEvent p, List<PaymentEvent> sorted, int idx) {
 		String time = TIME_FMT.format(Instant.ofEpochMilli(p.timestampMs()));
 		String dir  = p.incoming() ? "IN " : "OUT";
 		String amt  = (p.incoming() ? "+" : "-") + AmountFormat.pretty(p.amount());
@@ -252,6 +253,10 @@ public final class SessionDetailScreen extends Screen {
 		ctx.drawString(font, time, listX + 30, y, Theme.TEXT_DIM, false);
 		ctx.drawString(font, dir,  listX + 80, y, color, false);
 		ctx.drawString(font, amt,  listX + 110, y, color, false);
+		String mult = Multiplier.labelFor(sorted, idx);
+		if (mult != null) {
+			ctx.drawString(font, mult, listX + 110 + font.width(amt) + 6, y, Theme.WARN, false);
+		}
 	}
 
 	private void drawRemoveButton(GuiGraphics ctx, int y, PaymentEvent p, int mx, int my) {

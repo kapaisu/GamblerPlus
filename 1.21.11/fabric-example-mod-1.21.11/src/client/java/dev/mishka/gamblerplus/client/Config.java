@@ -37,6 +37,8 @@ public final class Config {
 	private boolean rakebackEnabled = false;
 	private double rakebackPct = 5.0;
 	private boolean arrowGameSupport = false;
+	private boolean numericTimer = false;
+	private boolean showGraph = false;
 
 	private final HudLayout hudLayout = new HudLayout();
 
@@ -61,6 +63,9 @@ public final class Config {
 	public boolean rakebackEnabled()     { return rakebackEnabled; }
 	public double  rakebackPct()         { return rakebackPct; }
 	public boolean arrowGameSupport()    { return arrowGameSupport; }
+	public boolean numericTimer()        { return numericTimer; }
+	public boolean showGraph()           { return showGraph; }
+	public void setShowGraph(boolean v)  { showGraph = v; save(); }
 	public HudLayout hudLayout()         { return hudLayout; }
 
 	public void toggleGamblingMode() { gamblingMode = !gamblingMode; save(); }
@@ -69,6 +74,7 @@ public final class Config {
 	public void toggleVerify()       { verifyLargePayments = !verifyLargePayments; save(); }
 	public void toggleRakeback()     { rakebackEnabled = !rakebackEnabled; save(); }
 	public void toggleArrowGameSupport() { arrowGameSupport = !arrowGameSupport; save(); }
+	public void toggleNumericTimer()     { numericTimer = !numericTimer; save(); }
 
 	public void stepRakebackPct(int direction) {
 		int idx = 0;
@@ -87,6 +93,11 @@ public final class Config {
 		double hi = Math.log(THRESHOLD_MAX);
 		long raw = (long) Math.round(Math.exp(lo + (hi - lo) * t));
 		largePaymentThreshold = snapNice(Math.max(THRESHOLD_MIN, Math.min(THRESHOLD_MAX, raw)));
+		save();
+	}
+
+	public void setThreshold(long v) {
+		largePaymentThreshold = Math.max(THRESHOLD_MIN, Math.min(THRESHOLD_MAX, v));
 		save();
 	}
 
@@ -140,6 +151,8 @@ public final class Config {
 			if (j.has("rakebackEnabled"))       rakebackEnabled       = j.get("rakebackEnabled").getAsBoolean();
 			if (j.has("rakebackPct"))           rakebackPct           = j.get("rakebackPct").getAsDouble();
 			if (j.has("arrowGameSupport"))      arrowGameSupport      = j.get("arrowGameSupport").getAsBoolean();
+			if (j.has("numericTimer"))          numericTimer          = j.get("numericTimer").getAsBoolean();
+			if (j.has("showGraph"))             showGraph             = j.get("showGraph").getAsBoolean();
 			if (largePaymentThreshold < THRESHOLD_MIN) largePaymentThreshold = THRESHOLD_MIN;
 			if (largePaymentThreshold > THRESHOLD_MAX) largePaymentThreshold = THRESHOLD_MAX;
 
@@ -151,6 +164,19 @@ public final class Config {
 				if (h.has("timerX")) hudLayout.timerX = h.get("timerX").getAsInt();
 				if (h.has("timerY")) hudLayout.timerY = h.get("timerY").getAsInt();
 				if (h.has("timerScale")) hudLayout.timerScale = HudLayout.clampScale(h.get("timerScale").getAsFloat());
+				hudLayout.imageEntries.clear();
+				if (h.has("imageEntries")) {
+					JsonArray arr = h.getAsJsonArray("imageEntries");
+					for (int i = 0; i < arr.size(); i++) {
+						JsonObject o = arr.get(i).getAsJsonObject();
+						HudLayout.ImageEntry ie = new HudLayout.ImageEntry();
+						if (o.has("file")) ie.file = o.get("file").getAsString();
+						if (o.has("x")) ie.x = o.get("x").getAsInt();
+						if (o.has("y")) ie.y = o.get("y").getAsInt();
+						if (o.has("scale")) ie.scale = HudLayout.clampScale(o.get("scale").getAsFloat());
+						hudLayout.imageEntries.add(ie);
+					}
+				}
 				hudLayout.textEntries.clear();
 				if (h.has("textEntries")) {
 					JsonArray arr = h.getAsJsonArray("textEntries");
@@ -164,7 +190,7 @@ public final class Config {
 						if (e.has("r")) t.r = HudLayout.clampByte(e.get("r").getAsInt());
 						if (e.has("g")) t.g = HudLayout.clampByte(e.get("g").getAsInt());
 						if (e.has("b")) t.b = HudLayout.clampByte(e.get("b").getAsInt());
-						if (e.has("font")) t.font = Math.max(0, Math.min(4, e.get("font").getAsInt()));
+						if (e.has("font")) t.font = Math.max(0, Math.min(TextHud.FONT_NAMES.length - 1, e.get("font").getAsInt()));
 						hudLayout.textEntries.add(t);
 					}
 				} else if (h.has("textContent")) {
@@ -204,6 +230,8 @@ public final class Config {
 		j.addProperty("rakebackEnabled", rakebackEnabled);
 		j.addProperty("rakebackPct", rakebackPct);
 		j.addProperty("arrowGameSupport", arrowGameSupport);
+		j.addProperty("numericTimer", numericTimer);
+		j.addProperty("showGraph", showGraph);
 
 		JsonObject h = new JsonObject();
 		h.addProperty("auctionX", hudLayout.auctionX);
@@ -226,6 +254,16 @@ public final class Config {
 			entries.add(e);
 		}
 		h.add("textEntries", entries);
+		JsonArray images = new JsonArray();
+		for (HudLayout.ImageEntry ie : hudLayout.imageEntries) {
+			JsonObject o = new JsonObject();
+			o.addProperty("file", ie.file);
+			o.addProperty("x", ie.x);
+			o.addProperty("y", ie.y);
+			o.addProperty("scale", ie.scale);
+			images.add(o);
+		}
+		h.add("imageEntries", images);
 		j.add("hudLayout", h);
 
 		j.addProperty("allTimeIn", stats.allTimeIn());

@@ -8,7 +8,7 @@ import org.lwjgl.glfw.GLFW;
 
 public final class UsefulScreen extends Screen {
 	private static final int PANEL_W = 320;
-	private static final int PANEL_H = 220;
+	private static final int PANEL_H = 250;
 	private static final long ANIM_MS = 200L;
 
 	private int px, py;
@@ -18,6 +18,7 @@ public final class UsefulScreen extends Screen {
 	private int[] auctionRect;
 	private int[] timerRect;
 	private int[] textRect;
+	private int[] imagesRect;
 	private int[] editRect;
 	private int[] closeRect;
 
@@ -78,6 +79,10 @@ public final class UsefulScreen extends Screen {
 
 		Widgets.button(ctx, font, "text on gui", bx, by, btnW, btnH, mx, my, Theme.BRAND, 1f);
 		textRect = new int[]{bx, by, bx + btnW, by + btnH};
+		by += btnH + gap;
+
+		Widgets.button(ctx, font, "images", bx, by, btnW, btnH, mx, my, Theme.BRAND, 1f);
+		imagesRect = new int[]{bx, by, bx + btnW, by + btnH};
 
 		int eW = 130, eH = 18;
 		int ex = px + (PANEL_W - eW) / 2;
@@ -106,6 +111,10 @@ public final class UsefulScreen extends Screen {
 		}
 		if (hit(textRect, mx, my)) {
 			mc.setScreen(new TextScreen());
+			return true;
+		}
+		if (hit(imagesRect, mx, my)) {
+			mc.setScreen(new ImagesScreen());
 			return true;
 		}
 		if (hit(editRect, mx, my)) {

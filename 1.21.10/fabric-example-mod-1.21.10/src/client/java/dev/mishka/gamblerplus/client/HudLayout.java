@@ -16,6 +16,7 @@ public final class HudLayout {
 	public float timerScale = 1.0f;
 
 	public final List<TextEntry> textEntries = new ArrayList<>();
+	public final List<ImageEntry> imageEntries = new ArrayList<>();
 
 	public boolean editing = false;
 
@@ -44,5 +45,12 @@ public final class HudLayout {
 		public int argb() {
 			return 0xFF000000 | (clampByte(r) << 16) | (clampByte(g) << 8) | clampByte(b);
 		}
+	}
+
+	public static final class ImageEntry {
+		public String file = "";
+		public int x = 10;
+		public int y = 220;
+		public float scale = 1.0f;
 	}
 }

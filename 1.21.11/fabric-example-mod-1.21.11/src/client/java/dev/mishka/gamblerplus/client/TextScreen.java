@@ -23,6 +23,10 @@ public final class TextScreen extends Screen {
 	private int selected = 0;
 	private boolean textFocused = true;
 	private int dragChannel = -1;
+	private int listScroll = 0;
+	private int[] listBoundsRect;
+	private boolean fontDropdownOpen = false;
+	private long fontDropdownAt = 0L;
 
 	private int[] fieldRect;
 	private int[] closeRect;
@@ -31,6 +35,7 @@ public final class TextScreen extends Screen {
 	private int[] removeRect;
 	private int[][] sliderRects = new int[3][];
 	private final List<int[]> entryRects = new ArrayList<>();
+	private final List<int[]> fontOptionRects = new ArrayList<>();
 
 	public TextScreen() {
 		super(Minecraft.getInstance(), Minecraft.getInstance().font, Component.literal("Text on GUI"));
@@ -86,9 +91,19 @@ public final class TextScreen extends Screen {
 		ctx.drawString(font, "ENTRIES", listX + 6, listY + 4, Theme.TEXT_DIM, false);
 
 		entryRects.clear();
-		int rowY = listY + 16;
 		int rowH = 14;
-		for (int i = 0; i < entries.size(); i++) {
+		int listTopY = listY + 14;
+		int listBotY = listY + listH - 20;
+		int visibleRows = Math.max(1, (listBotY - listTopY) / (rowH + 2));
+		int maxScroll = Math.max(0, entries.size() - visibleRows);
+		if (listScroll > maxScroll) listScroll = maxScroll;
+		if (listScroll < 0) listScroll = 0;
+
+		listBoundsRect = new int[]{listX, listTopY, listX + listW, listBotY};
+		ctx.enableScissor(listX + 1, listTopY, listX + listW - 1, listBotY);
+		int rowY = listTopY + 2;
+		for (int i = listScroll; i < entries.size(); i++) {
+			if (rowY > listBotY - rowH) break;
 			HudLayout.TextEntry en = entries.get(i);
 			boolean isSel = i == selected;
 			int fill = isSel ? Theme.SURFACE : (mx >= listX + 4 && mx < listX + listW - 4 && my >= rowY && my < rowY + rowH ? Theme.SURFACE : 0x00000000);
@@ -98,10 +113,20 @@ public final class TextScreen extends Screen {
 			ctx.drawString(font, label, listX + 8, rowY + (rowH - font.lineHeight) / 2 + 1, isSel ? Theme.TEXT : Theme.TEXT_MUTED, false);
 			entryRects.add(new int[]{listX + 4, rowY, listX + listW - 4, rowY + rowH});
 			rowY += rowH + 2;
-			if (rowY > listY + listH - 20) break;
 		}
+		ctx.disableScissor();
+
 		if (entries.isEmpty()) {
 			ctx.drawString(font, "no entries yet", listX + 8, listY + 20, Theme.TEXT_DIM, false);
+		}
+		if (entries.size() > visibleRows) {
+			int sbX = listX + listW - 4;
+			int sbTop = listTopY + 2;
+			int sbLen = listBotY - listTopY - 4;
+			int thumb = Math.max(10, sbLen * visibleRows / entries.size());
+			int off = maxScroll == 0 ? 0 : (sbLen - thumb) * listScroll / maxScroll;
+			ctx.fill(sbX, sbTop, sbX + 2, sbTop + sbLen, Theme.PANEL_LINE);
+			ctx.fill(sbX, sbTop + off, sbX + 2, sbTop + off + thumb, Theme.TEXT_MUTED);
 		}
 
 		int addBtnY = listY + listH - 16;
@@ -123,9 +148,10 @@ public final class TextScreen extends Screen {
 			int r2Y = fY + fH + 8;
 			ctx.drawString(font, "font", editX, r2Y, Theme.TEXT_DIM, false);
 			int fontBtnX = editX + 40;
-			int fontBtnW = 120;
+			int fontBtnW = 160;
 			int fontBtnH = 14;
-			String fontLabel = "< " + TextHud.FONT_NAMES[en.font] + " >";
+			String arrow = fontDropdownOpen ? " v" : " >";
+			String fontLabel = TextHud.FONT_NAMES[en.font] + arrow;
 			Widgets.flatButton(ctx, font, fontLabel, fontBtnX, r2Y - 3, fontBtnW, fontBtnH, mx, my, Theme.BRAND);
 			fontRect = new int[]{fontBtnX, r2Y - 3, fontBtnX + fontBtnW, r2Y - 3 + fontBtnH};
 
@@ -181,7 +207,39 @@ public final class TextScreen extends Screen {
 			else seekChannel(mx, dragChannel);
 		}
 
+		drawFontDropdown(ctx, mx, my);
+
 		pose.popMatrix();
+	}
+
+	private void drawFontDropdown(GuiGraphics ctx, int mx, int my) {
+		fontOptionRects.clear();
+		if (!fontDropdownOpen || fontRect == null) return;
+		float t = Math.min(1f, (System.currentTimeMillis() - fontDropdownAt) / 180f);
+		float e = Theme.easeOutCubic(t);
+		int itemH = 12;
+		int totalH = TextHud.FONT_NAMES.length * itemH + 4;
+		int shownH = Math.round(totalH * e);
+		if (shownH < 3) return;
+		int dX = fontRect[0];
+		int dY = fontRect[3] + 2;
+		int dW = fontRect[2] - fontRect[0];
+		Theme.roundPanel(ctx, dX, dY, dX + dW, dY + shownH, 3, Theme.BG_SOLID, Theme.BRAND);
+		ctx.enableScissor(dX + 1, dY + 1, dX + dW - 1, dY + shownH - 1);
+		HudLayout layout = GamblerPlusClient.CONFIG.hudLayout();
+		int curFont = -1;
+		if (selected >= 0 && selected < layout.textEntries.size()) curFont = layout.textEntries.get(selected).font;
+		for (int i = 0; i < TextHud.FONT_NAMES.length; i++) {
+			int iy = dY + 2 + i * itemH;
+			int[] rect = new int[]{dX + 2, iy, dX + dW - 2, iy + itemH};
+			fontOptionRects.add(rect);
+			boolean hover = mx >= rect[0] && mx < rect[2] && my >= rect[1] && my < rect[3];
+			if (hover) ctx.fill(rect[0], rect[1], rect[2], rect[3], 0x30FFFFFF);
+			if (i == curFont) ctx.fill(rect[0], rect[1], rect[0] + 2, rect[3], Theme.BRAND);
+			int textColor = i == curFont ? Theme.BRAND : (hover ? Theme.TEXT : Theme.TEXT_MUTED);
+			ctx.drawString(font, TextHud.FONT_NAMES[i], rect[0] + 8, iy + (itemH - font.lineHeight) / 2 + 1, textColor, false);
+		}
+		ctx.disableScissor();
 	}
 
 	private static String trimName(String s, int max) {
@@ -239,10 +297,25 @@ public final class TextScreen extends Screen {
 			}
 		}
 		textFocused = hit(fieldRect, mx, my);
+		if (fontDropdownOpen) {
+			for (int i = 0; i < fontOptionRects.size(); i++) {
+				if (hit(fontOptionRects.get(i), mx, my)) {
+					if (selected >= 0 && selected < layout.textEntries.size()) {
+						layout.textEntries.get(selected).font = i;
+						GamblerPlusClient.CONFIG.save();
+					}
+					fontDropdownOpen = false;
+					return true;
+				}
+			}
+		}
 		if (hit(fontRect, mx, my) && selected >= 0 && selected < layout.textEntries.size()) {
-			HudLayout.TextEntry en = layout.textEntries.get(selected);
-			en.font = (en.font + 1) % TextHud.FONT_NAMES.length;
-			GamblerPlusClient.CONFIG.save();
+			fontDropdownOpen = !fontDropdownOpen;
+			fontDropdownAt = System.currentTimeMillis();
+			return true;
+		}
+		if (fontDropdownOpen) {
+			fontDropdownOpen = false;
 			return true;
 		}
 		for (int i = 0; i < 3; i++) {
@@ -263,6 +336,19 @@ public final class TextScreen extends Screen {
 
 	private static boolean hit(int[] r, int mx, int my) {
 		return r != null && mx >= r[0] && mx < r[2] && my >= r[1] && my < r[3];
+	}
+
+	@Override
+	public boolean mouseScrolled(double mxD, double myD, double hd, double vd) {
+		int mx = Math.round((float) mxD / uiScale);
+		int my = Math.round((float) myD / uiScale);
+		if (hit(listBoundsRect, mx, my)) {
+			if (vd < 0) listScroll++;
+			else if (vd > 0) listScroll--;
+			if (listScroll < 0) listScroll = 0;
+			return true;
+		}
+		return super.mouseScrolled(mxD, myD, hd, vd);
 	}
 
 	@Override

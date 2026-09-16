@@ -2,13 +2,16 @@ package dev.mishka.gamblerplus.client;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
 public final class AuctionHud {
-	private static final int BASE_W = 160;
-	private static final int BASE_H = 100;
+	private static final int BASE_W = 200;
+	private static final int BASE_H = 108;
 	private static final int LINE_H = 10;
+	private static final int RING_R = 16;
+	private static final int RING_COL_W = RING_R * 2 + 8;
 
 	private AuctionHud() {}
 
@@ -35,37 +38,71 @@ public final class AuctionHud {
 		pose.translate(x + 8f, y + 6f, 0f);
 		pose.scale(layout.auctionScale, layout.auctionScale, 1f);
 
-		ctx.drawString(font, "Gambler", 0, 0, Theme.TEXT, false);
-		int brandW = font.width("Gambler ");
-		ctx.drawString(font, "Plus", brandW, 0, Theme.BRAND, false);
-		int psuffix = font.width("Gambler Plus ");
-		ctx.drawString(font, "auction", psuffix, 0, Theme.TEXT_DIM, false);
+		int innerW = BASE_W - 16;
+		boolean numeric = GamblerPlusClient.CONFIG.numericTimer();
+		int leftW = numeric || (!live && !linger) ? innerW : innerW - RING_COL_W;
 
-		ctx.fill(0, LINE_H + 2, BASE_W - 16, LINE_H + 3, Theme.PANEL_LINE);
+		String bA = "Gambler ";
+		String bB = "Plus";
+		String bC = " auction";
+		int wA = font.width(bA);
+		int wB = font.width(bB);
+		int wC = font.width(bC);
+		int badgeTotal = wA + wB + wC;
+		int badgeX = Math.max(0, (leftW - badgeTotal) / 2);
+		ctx.drawString(font, bA, badgeX, 0, Theme.TEXT, false);
+		ctx.drawString(font, bB, badgeX + wA, 0, Theme.BRAND, false);
+		ctx.drawString(font, bC, badgeX + wA + wB, 0, Theme.TEXT_DIM, false);
+
+		ctx.fill(0, LINE_H + 2, leftW, LINE_H + 3, Theme.PANEL_LINE);
 
 		int y0 = LINE_H + 6;
 
 		if (live) {
+			ItemStack stack = auction.itemStack();
+			int textX = 0;
+			if (stack != null && !stack.isEmpty()) {
+				ctx.renderItem(stack, 0, y0 - 2);
+				ctx.renderItemDecorations(font, stack, 0, y0 - 2);
+				textX = 20;
+			}
 			String item = auction.item();
-			if (auction.itemCount() > 1) item = item + " x" + auction.itemCount();
-			ctx.drawString(font, trim(font, item, BASE_W - 20), 0, y0, Theme.TEXT, false);
-			ctx.drawString(font, "ends " + TimeParse.prettyDuration(auction.remainingMs()),
-					0, y0 + LINE_H, Theme.TEXT_MUTED, false);
+			if (auction.itemCount() > 1 && (stack == null || stack.isEmpty())) item = item + " x" + auction.itemCount();
+			ctx.drawString(font, trim(font, item, leftW - textX), textX, y0, Theme.TEXT, false);
+
+			if (numeric) {
+				ctx.drawString(font, "ends " + TimeParse.prettyDuration(auction.remainingMs()),
+						textX, y0 + LINE_H + 4, Theme.TEXT_MUTED, false);
+			}
 
 			List<Auction.Bid> bids = auction.topBids(3);
-			int rowY = y0 + LINE_H * 2 + 4;
+			int rowY = y0 + LINE_H * 2 + 6;
 			if (bids.isEmpty()) {
 				ctx.drawString(font, "waiting for bids", 0, rowY, Theme.TEXT_DIM, false);
 			} else {
 				for (int i = 0; i < bids.size(); i++) {
 					Auction.Bid b = bids.get(i);
 					int color = i == 0 ? Theme.GAIN : Theme.TEXT;
-					ctx.drawString(font, (i + 1) + "." + b.player(), 0, rowY, color, false);
+					String namePart = (i + 1) + "." + b.player();
 					String amt = AmountFormat.pretty(b.amount());
 					int aw = font.width(amt);
-					ctx.drawString(font, amt, BASE_W - 18 - aw, rowY, color, false);
+					int nameMax = leftW - aw - 6;
+					ctx.drawString(font, trim(font, namePart, nameMax), 0, rowY, color, false);
+					ctx.drawString(font, amt, leftW - aw - 2, rowY, color, false);
 					rowY += LINE_H;
 				}
+			}
+
+			if (!numeric) {
+				float progress = 0f;
+				long total = auction.endsAtMs() - auction.startedAtMs();
+				if (total > 0) progress = 1f - Math.min(1f, (float) auction.remainingMs() / (float) total);
+				int cx = leftW + RING_COL_W / 2;
+				int cy = BASE_H / 2 - 6;
+				CircleDial.draw(ctx, cx, cy, RING_R, progress, Theme.BRAND, Theme.SURFACE_ALT);
+				String rem = TimeParse.prettyDuration(auction.remainingMs());
+				int rw = font.width(rem);
+				ctx.drawString(font, rem, cx - rw / 2, cy - font.lineHeight / 2 + 1, Theme.TEXT, false);
 			}
 		} else if (linger) {
 			Auction.Bid w = auction.winner();
@@ -73,14 +110,22 @@ public final class AuctionHud {
 			long remain = Auction.LINGER_MS - (System.currentTimeMillis() - auction.endedAtMs());
 			String secs = (Math.max(0, remain) / 1000L) + "s";
 			int sw = font.width(secs);
-			ctx.drawString(font, secs, BASE_W - 18 - sw, y0, Theme.TEXT_DIM, false);
+			ctx.drawString(font, secs, leftW - 2 - sw, y0, Theme.TEXT_DIM, false);
 			if (w != null) {
-				ctx.drawString(font, w.player(), 0, y0 + LINE_H + 2, Theme.TEXT, false);
+				ctx.drawString(font, trim(font, w.player(), leftW), 0, y0 + LINE_H + 2, Theme.TEXT, false);
+				ItemStack stack = auction.itemStack();
+				int textX = 0;
+				int row = y0 + LINE_H * 2 + 4;
+				if (stack != null && !stack.isEmpty()) {
+					ctx.renderItem(stack, 0, row - 3);
+					ctx.renderItemDecorations(font, stack, 0, row - 3);
+					textX = 20;
+				}
 				String item = auction.item();
-				if (auction.itemCount() > 1) item = item + " x" + auction.itemCount();
-				ctx.drawString(font, "won " + trim(font, item, BASE_W - 34), 0, y0 + LINE_H * 2 + 2, Theme.TEXT_MUTED, false);
+				if (auction.itemCount() > 1 && (stack == null || stack.isEmpty())) item = item + " x" + auction.itemCount();
+				ctx.drawString(font, "won " + trim(font, item, leftW - textX - 18), textX, row, Theme.TEXT_MUTED, false);
 				String amt = "for " + AmountFormat.pretty(w.amount());
-				ctx.drawString(font, amt, 0, y0 + LINE_H * 3 + 4, Theme.GAIN, false);
+				ctx.drawString(font, amt, 0, y0 + LINE_H * 3 + 8, Theme.GAIN, false);
 			} else {
 				ctx.drawString(font, "no bids", 0, y0 + LINE_H + 2, Theme.TEXT_DIM, false);
 			}

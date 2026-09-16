@@ -24,6 +24,8 @@ public final class SetupScreen extends Screen {
 	private long openedAtMs;
 	private String flashKey;
 	private long flashUntilMs;
+	private String rejectMsg;
+	private long rejectUntilMs;
 	private boolean userBound;
 	private boolean closing;
 	private float uiScale = 1f;
@@ -75,16 +77,9 @@ public final class SetupScreen extends Screen {
 
 		int cx = virtualW / 2;
 		int iy = py + 18;
-		int iconX = cx - ICON_SIZE / 2;
-		{
-			float s = (float) ICON_SIZE / 500f;
-			var p = ctx.pose();
-			p.pushPose();
-			p.translate((float) iconX, (float) iy, 0f);
-			p.scale(s, s, 1f);
-			ctx.blit(RenderType::guiTextured, ICON, 0, 0, 0f, 0f, 500, 500, 500, 500, 0xFFFFFFFF);
-			p.popPose();
-		}
+		ctx.blit(RenderType::guiTextured, ICON,
+				cx - ICON_SIZE / 2, iy, 0f, 0f,
+				ICON_SIZE, ICON_SIZE, 500, 500, 500, 500, 0xFFFFFFFF);
 
 		String title = "welcome to gambler plus";
 		int tw = font.width(title);
@@ -92,7 +87,10 @@ public final class SetupScreen extends Screen {
 
 		String sub;
 		int subColor;
-		if (flashKey != null) {
+		if (rejectMsg != null && System.currentTimeMillis() < rejectUntilMs) {
+			sub = rejectMsg;
+			subColor = Theme.LOSS;
+		} else if (flashKey != null) {
 			sub = "bound to " + flashKey;
 			subColor = Theme.GAIN;
 		} else {
@@ -110,19 +108,32 @@ public final class SetupScreen extends Screen {
 	}
 
 	@Override
-	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+	public boolean keyPressed(int keyCode, int _sc, int _md) {
 		if (userBound) return true;
 		int key = keyCode;
 		if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_UNKNOWN) return true;
-		bind(InputConstants.getKey(keyCode, scanCode));
+		if (key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT) {
+			flashReject("shift is reserved");
+			return true;
+		}
+		bind(InputConstants.getKey(keyCode, _sc));
 		return true;
 	}
 
 	@Override
-	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+	public boolean mouseClicked(double _mx0, double _my0, int _btn) {
 		if (userBound) return true;
-		bind(InputConstants.Type.MOUSE.getOrCreate(button));
+		if (_btn == 0) {
+			flashReject("left click is reserved");
+			return true;
+		}
+		bind(InputConstants.Type.MOUSE.getOrCreate(_btn));
 		return true;
+	}
+
+	private void flashReject(String msg) {
+		rejectMsg = msg;
+		rejectUntilMs = System.currentTimeMillis() + 1200L;
 	}
 
 	private void bind(InputConstants.Key k) {

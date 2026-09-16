@@ -1,5 +1,7 @@
 package dev.mishka.gamblerplus.client;
 
+import net.minecraft.world.item.ItemStack;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -14,25 +16,36 @@ public final class Auction {
 	private volatile boolean active = false;
 	private volatile String item = "";
 	private volatile int itemCount = 1;
+	private volatile ItemStack itemStack = ItemStack.EMPTY;
 	private volatile long startedAtMs = 0L;
 	private volatile long endsAtMs = 0L;
 	private volatile long endedAtMs = 0L;
+	private volatile long minBid = 0L;
 	private volatile Bid winner = null;
 	private volatile boolean pendingCelebration = false;
 
 	private final LinkedHashMap<String, Long> totals = new LinkedHashMap<>();
 
-	public synchronized boolean start(String item, int count, long durationMs) {
+	public synchronized boolean start(String item, int count, long durationMs, ItemStack stack, long minBid) {
 		if (active) return false;
 		this.item = item == null || item.isBlank() ? "unnamed" : item;
 		this.itemCount = Math.max(1, count);
+		this.itemStack = stack == null ? ItemStack.EMPTY : stack.copy();
 		this.startedAtMs = System.currentTimeMillis();
 		this.endsAtMs = this.startedAtMs + Math.max(1_000L, durationMs);
+		this.minBid = Math.max(0L, minBid);
 		this.winner = null;
 		this.totals.clear();
 		this.active = true;
 		return true;
 	}
+
+	public synchronized void extend(long extraMs) {
+		if (!active) return;
+		this.endsAtMs += Math.max(0L, extraMs);
+	}
+
+	public synchronized long minBid() { return minBid; }
 
 	public synchronized void stop() {
 		if (!active) return;
@@ -77,6 +90,7 @@ public final class Auction {
 	public synchronized void onIncoming(String player, long amount) {
 		if (!active) return;
 		if (player == null || player.isEmpty()) return;
+		if (amount < minBid) return;
 		totals.merge(player, amount, Long::sum);
 	}
 
@@ -85,6 +99,7 @@ public final class Auction {
 	public synchronized int itemCount()       { return itemCount; }
 	public synchronized long startedAtMs()    { return startedAtMs; }
 	public synchronized long endsAtMs()       { return endsAtMs; }
+	public synchronized ItemStack itemStack() { return itemStack; }
 	public synchronized Bid winner()          { return winner; }
 	public synchronized long remainingMs() {
 		if (!active) return 0L;

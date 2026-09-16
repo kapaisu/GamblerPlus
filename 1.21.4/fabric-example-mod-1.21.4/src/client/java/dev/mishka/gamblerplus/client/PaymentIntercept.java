@@ -1,7 +1,9 @@
 package dev.mishka.gamblerplus.client;
 
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -12,6 +14,7 @@ public final class PaymentIntercept {
 			Pattern.CASE_INSENSITIVE);
 
 	private static volatile boolean bypassOnce = false;
+	private static volatile Screen pending;
 
 	private PaymentIntercept() {}
 
@@ -26,13 +29,23 @@ public final class PaymentIntercept {
 			if (amount < config.largePaymentThreshold()) return true;
 			String recipient = m.group(1).replaceAll("[^A-Za-z0-9_]", "");
 			if (recipient.isEmpty()) return true;
-			Minecraft mc = Minecraft.getInstance();
-			mc.execute(() -> mc.setScreen(new VerifyPaymentScreen(recipient, amount, command)));
+			pending = new VerifyPaymentScreen(recipient, amount, command);
 			return false;
+		});
+		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+			Screen p = pending;
+			if (p != null) {
+				pending = null;
+				mc.setScreen(p);
+			}
 		});
 	}
 
 	public static void markConfirmed() {
 		bypassOnce = true;
+	}
+
+	public static void openLater(Screen screen) {
+		pending = screen;
 	}
 }

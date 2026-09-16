@@ -7,7 +7,11 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 
 public final class TextHud {
-	public static final String[] FONT_NAMES = {"regular", "bold", "italic", "bold italic", "underlined"};
+	public static final String[] FONT_NAMES = {
+			"regular", "bold", "italic", "bold italic",
+			"underlined", "bold underlined", "italic underlined", "strikethrough",
+			"bold strikethrough", "obfuscated"
+	};
 	private static final int MIN_W = 40;
 
 	private TextHud() {}
@@ -18,6 +22,11 @@ public final class TextHud {
 			case 2 -> Style.EMPTY.withItalic(true);
 			case 3 -> Style.EMPTY.withBold(true).withItalic(true);
 			case 4 -> Style.EMPTY.withUnderlined(true);
+			case 5 -> Style.EMPTY.withBold(true).withUnderlined(true);
+			case 6 -> Style.EMPTY.withItalic(true).withUnderlined(true);
+			case 7 -> Style.EMPTY.withStrikethrough(true);
+			case 8 -> Style.EMPTY.withBold(true).withStrikethrough(true);
+			case 9 -> Style.EMPTY.withObfuscated(true);
 			default -> Style.EMPTY;
 		};
 	}

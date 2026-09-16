@@ -22,6 +22,7 @@ public final class TimerScreen extends Screen {
 	private int[] startRect;
 	private int[] stopRect;
 	private int[] closeRect;
+	private int[] styleRect;
 
 	public TimerScreen() {
 		super(Component.literal("Timer"));
@@ -95,6 +96,13 @@ public final class TimerScreen extends Screen {
 			ctx.drawString(font, "set a duration then start", contentX, stateY, Theme.TEXT_MUTED, false);
 		}
 
+		int styleY = py + PANEL_H - 24;
+		boolean numeric = GamblerPlusClient.CONFIG.numericTimer();
+		String styleLabel = "style: " + (numeric ? "numbers" : "circle");
+		int stW = 130, stH = 14;
+		Widgets.flatButton(ctx, font, styleLabel, contentX, styleY, stW, stH, mx, my, Theme.BRAND);
+		styleRect = new int[]{contentX, styleY, contentX + stW, styleY + stH};
+
 		pose.popPose();
 	}
 
@@ -103,6 +111,10 @@ public final class TimerScreen extends Screen {
 		int mx = Math.round((float) _mx0 / uiScale);
 		int my = Math.round((float) _my0 / uiScale);
 		if (hit(closeRect, mx, my)) { onClose(); return true; }
+		if (hit(styleRect, mx, my)) {
+			GamblerPlusClient.CONFIG.toggleNumericTimer();
+			return true;
+		}
 		focused = hit(fieldRect, mx, my);
 		TimerState timer = GamblerPlusClient.TIMER;
 		if (hit(startRect, mx, my)) {

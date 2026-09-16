@@ -26,6 +26,8 @@ public final class SetupScreen extends Screen {
 	private long openedAtMs;
 	private String flashKey;
 	private long flashUntilMs;
+	private String rejectMsg;
+	private long rejectUntilMs;
 	private boolean userBound;
 	private boolean closing;
 	private float uiScale = 1f;
@@ -77,16 +79,9 @@ public final class SetupScreen extends Screen {
 
 		int cx = virtualW / 2;
 		int iy = py + 18;
-		int iconX = cx - ICON_SIZE / 2;
-		{
-			float s = (float) ICON_SIZE / 500f;
-			var p = ctx.pose();
-			p.pushMatrix();
-			p.translate((float) iconX, (float) iy);
-			p.scale(s, s);
-			ctx.blit(RenderPipelines.GUI_TEXTURED, ICON, 0, 0, 0f, 0f, 500, 500, 500, 500, 0xFFFFFFFF);
-			p.popMatrix();
-		}
+		ctx.blit(RenderPipelines.GUI_TEXTURED, ICON,
+				cx - ICON_SIZE / 2, iy, 0f, 0f,
+				ICON_SIZE, ICON_SIZE, 500, 500, 500, 500, 0xFFFFFFFF);
 
 		String title = "welcome to gambler plus";
 		int tw = font.width(title);
@@ -94,7 +89,10 @@ public final class SetupScreen extends Screen {
 
 		String sub;
 		int subColor;
-		if (flashKey != null) {
+		if (rejectMsg != null && System.currentTimeMillis() < rejectUntilMs) {
+			sub = rejectMsg;
+			subColor = Theme.LOSS;
+		} else if (flashKey != null) {
 			sub = "bound to " + flashKey;
 			subColor = Theme.GAIN;
 		} else {
@@ -116,6 +114,10 @@ public final class SetupScreen extends Screen {
 		if (userBound) return true;
 		int key = event.key();
 		if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_UNKNOWN) return true;
+		if (key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT) {
+			flashReject("shift is reserved");
+			return true;
+		}
 		bind(InputConstants.getKey(event));
 		return true;
 	}
@@ -123,8 +125,17 @@ public final class SetupScreen extends Screen {
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 		if (userBound) return true;
+		if (event.button() == 0) {
+			flashReject("left click is reserved");
+			return true;
+		}
 		bind(InputConstants.Type.MOUSE.getOrCreate(event.button()));
 		return true;
+	}
+
+	private void flashReject(String msg) {
+		rejectMsg = msg;
+		rejectUntilMs = System.currentTimeMillis() + 1200L;
 	}
 
 	private void bind(InputConstants.Key k) {
