@@ -13,19 +13,29 @@ public final class ChatListener {
 	public static void register(Config config, Stats stats, SessionManager sessions, Auction auction, AllTimeLog allTime, Runnable onChange) {
 		ClientReceiveMessageEvents.MODIFY_GAME.register((message, overlay) -> {
 			if (overlay) return message;
+			if (!config.chatMultiplierButton()) return message;
 			String line = message.getString();
 			PaymentEvent ev = PaymentParser.tryParse(line, System.currentTimeMillis());
 			if (ev == null || !ev.incoming()) return message;
-			long payback = ev.amount() * 2L;
-			String cmd = "/gplus2x " + ev.player() + " " + payback;
-			Component button = Component.literal(" [2x]").setStyle(
+			long doubleAmt = ev.amount() * 2L;
+			long sameAmt = ev.amount();
+			String doubleCmd = "/gplus2x " + ev.player() + " " + doubleAmt;
+			String sameCmd = "/gplus2x " + ev.player() + " " + sameAmt;
+			Component doubleBtn = Component.literal(" [2x]").setStyle(
 					Style.EMPTY
 							.withColor(ChatFormatting.GOLD)
 							.withBold(true)
-							.withClickEvent(new ClickEvent.RunCommand(cmd))
-							.withHoverEvent(new HoverEvent.ShowText(Component.literal("click to pay " + AmountFormat.pretty(payback) + " back")))
+							.withClickEvent(new ClickEvent.RunCommand(doubleCmd))
+							.withHoverEvent(new HoverEvent.ShowText(Component.literal("click to pay " + AmountFormat.pretty(doubleAmt) + " back")))
 			);
-			return message.copy().append(button);
+			Component paybackBtn = Component.literal(" [payback]").setStyle(
+					Style.EMPTY
+							.withColor(ChatFormatting.AQUA)
+							.withBold(true)
+							.withClickEvent(new ClickEvent.RunCommand(sameCmd))
+							.withHoverEvent(new HoverEvent.ShowText(Component.literal("click to pay " + AmountFormat.pretty(sameAmt) + " back")))
+			);
+			return message.copy().append(doubleBtn).append(paybackBtn);
 		});
 
 		ClientReceiveMessageEvents.GAME.register((message, overlay) -> {

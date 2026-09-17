@@ -23,6 +23,7 @@ public final class UsefulScreen extends Screen {
 	private int[] imagesRect;
 	private int[] editRect;
 	private int[] closeRect;
+	private int[] chatMulRect;
 
 	public UsefulScreen() {
 		super(Minecraft.getInstance(), Minecraft.getInstance().font, Component.literal("Useful"));
@@ -86,12 +87,18 @@ public final class UsefulScreen extends Screen {
 		Widgets.button(ctx, font, "images", bx, by, btnW, btnH, mx, my, Theme.BRAND, 1f);
 		imagesRect = new int[]{bx, by, bx + btnW, by + btnH};
 
+		boolean chatMulOn = GamblerPlusClient.CONFIG.chatMultiplierButton();
+		int mW = 190, mH = 16;
+		int mxb = px + (PANEL_W - mW) / 2;
+		int myb = py + PANEL_H - mH - 38;
+		Widgets.flatButton(ctx, font, "chat 2x button: " + (chatMulOn ? "on" : "off"),
+				mxb, myb, mW, mH, mx, my, chatMulOn ? Theme.GAIN : Theme.TEXT_DIM);
+		chatMulRect = new int[]{mxb, myb, mxb + mW, myb + mH};
+
 		int eW = 130, eH = 18;
 		int ex = px + (PANEL_W - eW) / 2;
 		int ey = py + PANEL_H - eH - 12;
-		HudLayout layout = GamblerPlusClient.CONFIG.hudLayout();
-		String label = layout.editing ? "exit edit hud" : "edit hud";
-		Widgets.button(ctx, font, label, ex, ey, eW, eH, mx, my, layout.editing ? Theme.LOSS : Theme.BRAND, 1f);
+		Widgets.button(ctx, font, "edit hud", ex, ey, eW, eH, mx, my, Theme.BRAND, 1f);
 		editRect = new int[]{ex, ey, ex + eW, ey + eH};
 
 		pose.popMatrix();
@@ -119,14 +126,12 @@ public final class UsefulScreen extends Screen {
 			mc.setScreenAndShow(new ImagesScreen());
 			return true;
 		}
+		if (hit(chatMulRect, mx, my)) {
+			GamblerPlusClient.CONFIG.toggleChatMultiplierButton();
+			return true;
+		}
 		if (hit(editRect, mx, my)) {
-			HudLayout layout = GamblerPlusClient.CONFIG.hudLayout();
-			if (layout.editing) {
-				layout.editing = false;
-				GamblerPlusClient.CONFIG.save();
-			} else {
-				mc.setScreenAndShow(new HudEditScreen());
-			}
+			mc.setScreenAndShow(new HudEditScreen());
 			return true;
 		}
 		return super.mouseClicked(event, doubleClick);

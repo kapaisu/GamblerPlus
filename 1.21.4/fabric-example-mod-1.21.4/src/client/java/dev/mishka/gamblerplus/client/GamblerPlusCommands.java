@@ -1,6 +1,5 @@
 package dev.mishka.gamblerplus.client;
 
-import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
@@ -11,13 +10,17 @@ public final class GamblerPlusCommands {
 	public static void register() {
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
 				dispatcher.register(ClientCommandManager.literal("gplus2x")
-						.then(ClientCommandManager.argument("player", StringArgumentType.word())
-								.then(ClientCommandManager.argument("amount", LongArgumentType.longArg(1L))
-										.executes(ctx -> {
-											String player = StringArgumentType.getString(ctx, "player");
-											long amount = LongArgumentType.getLong(ctx, "amount");
-											PaymentIntercept.openLater(new VerifyPaymentScreen(player, amount, "pay " + player + " " + amount));
-											return 1;
-										})))));
+						.then(ClientCommandManager.argument("payload", StringArgumentType.greedyString())
+								.executes(ctx -> {
+									String payload = StringArgumentType.getString(ctx, "payload");
+									int sp = payload.lastIndexOf(' ');
+									if (sp < 0) return 0;
+									String player = payload.substring(0, sp);
+									long amount;
+									try { amount = Long.parseLong(payload.substring(sp + 1)); }
+									catch (NumberFormatException nfe) { return 0; }
+									PaymentIntercept.openLater(new VerifyPaymentScreen(player, amount, "pay " + player + " " + amount));
+									return 1;
+								}))));
 	}
 }

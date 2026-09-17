@@ -6,14 +6,33 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public final class NetGraph {
 	private static final DateTimeFormatter TIME_FMT =
 			DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
-	private static final int MAX_POINTS = 200;
+
+	private static int cachedN = -1;
+	private static long cachedFirstTs = 0L;
+	private static long cachedLastTs = 0L;
+	private static int cachedChartW = -1;
+	private static int cachedChartH = -1;
+	private static int cachedChartX;
+	private static int cachedChartY;
+	private static int cachedNumCandles;
+	private static int cachedCellW;
+	private static int cachedCandleW;
+	private static int cachedZeroY;
+	private static long cachedMinV;
+	private static long cachedMaxV;
+	private static long cachedViewMin;
+	private static long cachedVr;
+	private static long[] cachedOpens;
+	private static long[] cachedHighs;
+	private static long[] cachedLows;
+	private static long[] cachedCloses;
+	private static int[] cachedFirstIdx;
+	private static int[] cachedLastIdx;
 
 	private NetGraph() {}
 
@@ -30,138 +49,173 @@ public final class NetGraph {
 			return;
 		}
 
-		List<PaymentEvent> chrono = new ArrayList<>(log);
-		Collections.reverse(chrono);
-
-		int total = chrono.size();
-		int stride = Math.max(1, (total + MAX_POINTS - 1) / MAX_POINTS);
-		List<PaymentEvent> down = new ArrayList<>();
-		if (stride == 1) {
-			down.addAll(chrono);
-		} else {
-			long net = 0;
-			for (int i = 0; i < total; i++) {
-				PaymentEvent e = chrono.get(i);
-				net += e.incoming() ? e.amount() : -e.amount();
-				if (i % stride == stride - 1 || i == total - 1) {
-					down.add(new PaymentEvent(e.timestampMs(), e.player(), Math.abs(net), net >= 0));
-					net = 0;
-				}
-			}
-		}
-
-		int n = down.size() + 1;
-		long[] cum = new long[n];
-		cum[0] = 0L;
-		long running = 0;
-		long minNet = 0, maxNet = 0;
-		for (int i = 0; i < down.size(); i++) {
-			PaymentEvent e = down.get(i);
-			running += e.incoming() ? e.amount() : -e.amount();
-			cum[i + 1] = running;
-			if (running < minNet) minNet = running;
-			if (running > maxNet) maxNet = running;
-		}
-
-		long range = Math.max(1L, maxNet - minNet);
-		long padding = Math.max(1L, range / 10);
-		long viewMin = minNet - padding;
-		long viewMax = maxNet + padding;
-		long vr = Math.max(1L, viewMax - viewMin);
-
-		int padX = 32, padY = 10;
+		int n = log.size();
+		int padX = 44, padY = 10;
 		int chartX = x + padX;
-		int chartW = w - padX - 12;
+		int chartW = Math.max(2, w - padX - 12);
 		int chartY = y + padY;
-		int chartH = h - padY * 2;
+		int chartH = Math.max(2, h - padY * 2);
+		int chartBottom = chartY + chartH;
 
-		int zeroY = chartY + chartH - (int) (((-viewMin) * (long) chartH) / vr);
-		if (zeroY >= chartY && zeroY < chartY + chartH) {
+		long firstTs = log.get(n - 1).timestampMs();
+		long lastTs  = log.get(0).timestampMs();
+
+		boolean cacheHit = cachedN == n
+				&& cachedFirstTs == firstTs
+				&& cachedLastTs == lastTs
+				&& cachedChartW == chartW
+				&& cachedChartH == chartH
+				&& cachedChartX == chartX
+				&& cachedChartY == chartY
+				&& cachedOpens != null;
+
+		int numCandles, cellW, candleW, zeroY;
+		long minV, maxV, viewMin, vr;
+		long[] opens, highs, lows, closes;
+		int[] firstIdx, lastIdx;
+
+		if (cacheHit) {
+			numCandles = cachedNumCandles;
+			cellW = cachedCellW;
+			candleW = cachedCandleW;
+			zeroY = cachedZeroY;
+			minV = cachedMinV;
+			maxV = cachedMaxV;
+			viewMin = cachedViewMin;
+			vr = cachedVr;
+			opens = cachedOpens;
+			highs = cachedHighs;
+			lows = cachedLows;
+			closes = cachedCloses;
+			firstIdx = cachedFirstIdx;
+			lastIdx = cachedLastIdx;
+		} else {
+			candleW = 7;
+			cellW = 10;
+			numCandles = Math.max(1, Math.min(chartW / cellW, n));
+			opens = new long[numCandles];
+			highs = new long[numCandles];
+			lows = new long[numCandles];
+			closes = new long[numCandles];
+			firstIdx = new int[numCandles];
+			lastIdx = new int[numCandles];
+			long running = 0;
+			long prevClose = 0;
+			int currentBucket = -1;
+			for (int i = 0; i < n; i++) {
+				PaymentEvent e = log.get(n - 1 - i);
+				int b = (int) ((long) i * numCandles / n);
+				if (b >= numCandles) b = numCandles - 1;
+				if (b != currentBucket) {
+					currentBucket = b;
+					opens[b] = prevClose;
+					highs[b] = prevClose;
+					lows[b] = prevClose;
+					firstIdx[b] = i;
+				}
+				running += e.incoming() ? e.amount() : -e.amount();
+				if (running > highs[b]) highs[b] = running;
+				if (running < lows[b]) lows[b] = running;
+				closes[b] = running;
+				lastIdx[b] = i;
+				prevClose = running;
+			}
+			long mn = 0, mx0 = 0;
+			for (int b = 0; b < numCandles; b++) {
+				if (highs[b] > mx0) mx0 = highs[b];
+				if (lows[b] < mn) mn = lows[b];
+			}
+			minV = mn;
+			maxV = mx0;
+			long range = Math.max(1L, maxV - minV);
+			long padV = Math.max(1L, range / 10);
+			viewMin = minV - padV;
+			long viewMax = maxV + padV;
+			vr = Math.max(1L, viewMax - viewMin);
+			zeroY = chartY + chartH - (int) (((-viewMin) * (long) chartH) / vr);
+			cachedN = n;
+			cachedFirstTs = firstTs;
+			cachedLastTs = lastTs;
+			cachedChartW = chartW;
+			cachedChartH = chartH;
+			cachedChartX = chartX;
+			cachedChartY = chartY;
+			cachedNumCandles = numCandles;
+			cachedCellW = cellW;
+			cachedCandleW = candleW;
+			cachedZeroY = zeroY;
+			cachedMinV = minV;
+			cachedMaxV = maxV;
+			cachedViewMin = viewMin;
+			cachedVr = vr;
+			cachedOpens = opens;
+			cachedHighs = highs;
+			cachedLows = lows;
+			cachedCloses = closes;
+			cachedFirstIdx = firstIdx;
+			cachedLastIdx = lastIdx;
+		}
+
+		ctx.text(font, AmountFormat.signed(maxV), x + 4, chartY - 1, Theme.TEXT_DIM, false);
+		ctx.text(font, AmountFormat.signed(minV), x + 4, chartY + chartH - font.lineHeight, Theme.TEXT_DIM, false);
+		if (zeroY - chartY > font.lineHeight + 2 && chartBottom - zeroY > font.lineHeight + 2) {
+			ctx.text(font, "0", x + 4, zeroY - font.lineHeight / 2, Theme.TEXT_DIM, false);
+		}
+
+		if (zeroY >= chartY && zeroY < chartBottom) {
 			for (int gx = chartX; gx < chartX + chartW; gx += 4) {
 				ctx.fill(gx, zeroY, gx + 2, zeroY + 1, 0x30FFFFFF);
 			}
 		}
 
-		ctx.text(font, AmountFormat.signed(maxNet), x + 4, chartY - 1, Theme.TEXT_DIM, false);
-		ctx.text(font, AmountFormat.signed(minNet), x + 4, chartY + chartH - font.lineHeight, Theme.TEXT_DIM, false);
-		if (zeroY - chartY > font.lineHeight + 2 && chartY + chartH - zeroY > font.lineHeight + 2) {
-			ctx.text(font, "0", x + 4, zeroY - font.lineHeight / 2, Theme.TEXT_DIM, false);
-		}
-
-		int[] xs = new int[n];
-		int[] ys = new int[n];
-		for (int i = 0; i < n; i++) {
-			xs[i] = n == 1 ? chartX + chartW / 2 : chartX + (i * (chartW - 1)) / (n - 1);
-			ys[i] = chartY + chartH - (int) (((cum[i] - viewMin) * (long) chartH) / vr);
-		}
-
-		int lastNet = cum[n - 1] > 0 ? 1 : (cum[n - 1] < 0 ? -1 : 0);
-		int trendColor = lastNet > 0 ? Theme.GAIN : (lastNet < 0 ? Theme.LOSS : Theme.BRAND);
-		int fillCol = (trendColor & 0x00FFFFFF) | 0x28000000;
-
-		for (int i = 0; i < n - 1; i++) {
-			int x0 = xs[i], y0 = ys[i], x1 = xs[i + 1], y1 = ys[i + 1];
-			int lo = Math.min(x0, x1);
-			int hi = Math.max(x0, x1);
-			int spanW = Math.max(1, hi - lo);
-			int dySeg = y1 - y0;
-			for (int cx = lo; cx < hi; cx++) {
-				int py = y0 + (dySeg * (cx - x0)) / spanW;
-				int fillTop = Math.min(py, zeroY);
-				int fillBot = Math.max(py, zeroY);
-				if (fillTop < chartY) fillTop = chartY;
-				if (fillBot > chartY + chartH) fillBot = chartY + chartH;
-				if (fillBot > fillTop) ctx.fill(cx, fillTop, cx + 1, fillBot, fillCol);
+		int hoverBucket = -1;
+		for (int b = 0; b < numCandles; b++) {
+			int cx = chartX + b * cellW;
+			int oy = chartY + chartH - (int) (((opens[b] - viewMin) * (long) chartH) / vr);
+			int cy = chartY + chartH - (int) (((closes[b] - viewMin) * (long) chartH) / vr);
+			int hy = chartY + chartH - (int) (((highs[b] - viewMin) * (long) chartH) / vr);
+			int ly = chartY + chartH - (int) (((lows[b] - viewMin) * (long) chartH) / vr);
+			boolean up = closes[b] >= opens[b];
+			int col = up ? Theme.GAIN : Theme.LOSS;
+			int wickX = cx + candleW / 2;
+			ctx.fill(wickX, hy, wickX + 1, ly + 1, col);
+			int bodyTop = Math.min(oy, cy);
+			int bodyBot = Math.max(oy, cy);
+			if (bodyBot - bodyTop < 1) bodyBot = bodyTop + 1;
+			ctx.fill(cx, bodyTop, cx + candleW, bodyBot, col);
+			if (mx >= cx && mx < cx + cellW && my >= y && my < y + h) {
+				hoverBucket = b;
 			}
 		}
 
-		for (int i = 0; i < n - 1; i++) {
-			drawThickLine(ctx, xs[i], ys[i], xs[i + 1], ys[i + 1], trendColor);
-		}
-
-		int hovered = -1;
-		int dotSpacing = Math.max(1, n / 40);
-		for (int i = 1; i < n; i++) {
-			if (i != n - 1 && (i % dotSpacing) != 0) continue;
-			int cxp = xs[i], cyp = ys[i];
-			int color = down.get(i - 1).incoming() ? Theme.GAIN : Theme.LOSS;
-			ctx.fill(cxp - 2, cyp - 2, cxp + 3, cyp + 3, Theme.SURFACE_SOLID);
-			ctx.fill(cxp - 1, cyp - 1, cxp + 2, cyp + 2, color);
-			if (mx >= cxp - 4 && mx <= cxp + 4 && my >= cyp - 4 && my <= cyp + 4) hovered = i;
-		}
-
-		if (hovered >= 1) {
-			PaymentEvent e = down.get(hovered - 1);
-			String time = TIME_FMT.format(Instant.ofEpochMilli(e.timestampMs()));
-			String netStr = "net " + AmountFormat.signed(cum[hovered]);
-			String delta = (stride > 1 ? "bucket " : (e.incoming() ? "+" : "-")) + AmountFormat.pretty(e.amount()) + (stride > 1 ? "" : " " + e.player());
-			int lw = Math.max(font.width(time), Math.max(font.width(netStr), font.width(delta)));
+		if (hoverBucket >= 0) {
+			int b = hoverBucket;
+			long o = opens[b], c = closes[b], hi = highs[b], lo = lows[b];
+			int fi = firstIdx[b], li = lastIdx[b];
+			PaymentEvent firstE = log.get(n - 1 - fi);
+			PaymentEvent lastE = log.get(n - 1 - li);
+			String timeStr = TIME_FMT.format(Instant.ofEpochMilli(firstE.timestampMs()));
+			if (fi != li) timeStr = timeStr + " - " + TIME_FMT.format(Instant.ofEpochMilli(lastE.timestampMs()));
+			String openStr  = "O " + AmountFormat.signed(o);
+			String hiStr    = "H " + AmountFormat.signed(hi);
+			String loStr    = "L " + AmountFormat.signed(lo);
+			String closeStr = "C " + AmountFormat.signed(c);
+			int lw = font.width(timeStr);
+			if (font.width(openStr)  > lw) lw = font.width(openStr);
+			if (font.width(hiStr)    > lw) lw = font.width(hiStr);
+			if (font.width(loStr)    > lw) lw = font.width(loStr);
+			if (font.width(closeStr) > lw) lw = font.width(closeStr);
 			int tw = lw + 10;
-			int th = font.lineHeight * 3 + 8;
+			int th = font.lineHeight * 5 + 10;
 			int tx = Math.max(x, Math.min(x + w - tw, mx + 8));
 			int ty = Math.max(y, my - th - 4);
-			Theme.roundPanel(ctx, tx, ty, tx + tw, ty + th, 3, Theme.BG_SOLID, trendColor);
-			ctx.text(font, time, tx + 5, ty + 4, Theme.TEXT_DIM, false);
-			ctx.text(font, netStr, tx + 5, ty + 4 + font.lineHeight, Theme.color(cum[hovered]), false);
-			ctx.text(font, delta, tx + 5, ty + 4 + font.lineHeight * 2, e.incoming() ? Theme.GAIN : Theme.LOSS, false);
-		}
-	}
-
-	private static void drawThickLine(GuiGraphicsExtractor ctx, int x0, int y0, int x1, int y1, int color) {
-		int dx = Math.abs(x1 - x0);
-		int dy = Math.abs(y1 - y0);
-		int sx = x0 < x1 ? 1 : -1;
-		int sy = y0 < y1 ? 1 : -1;
-		int err = dx - dy;
-		int x = x0, y = y0;
-		int guard = 0;
-		while (guard++ < 4096) {
-			ctx.fill(x, y, x + 1, y + 2, color);
-			ctx.fill(x, y + 1, x + 2, y + 2, color);
-			if (x == x1 && y == y1) break;
-			int e2 = 2 * err;
-			if (e2 > -dy) { err -= dy; x += sx; }
-			if (e2 < dx)  { err += dx; y += sy; }
+			int trend = c >= o ? Theme.GAIN : Theme.LOSS;
+			Theme.roundPanel(ctx, tx, ty, tx + tw, ty + th, 3, Theme.BG_SOLID, trend);
+			ctx.text(font, timeStr,  tx + 5, ty + 4, Theme.TEXT_DIM, false);
+			ctx.text(font, openStr,  tx + 5, ty + 4 + font.lineHeight,     Theme.TEXT, false);
+			ctx.text(font, hiStr,    tx + 5, ty + 4 + font.lineHeight * 2, Theme.GAIN, false);
+			ctx.text(font, loStr,    tx + 5, ty + 4 + font.lineHeight * 3, Theme.LOSS, false);
+			ctx.text(font, closeStr, tx + 5, ty + 4 + font.lineHeight * 4, trend, false);
 		}
 	}
 }

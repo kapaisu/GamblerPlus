@@ -39,6 +39,7 @@ public final class Config {
 	private boolean arrowGameSupport = false;
 	private boolean numericTimer = false;
 	private boolean showGraph = false;
+	private boolean chatMultiplierButton = true;
 
 	private final HudLayout hudLayout = new HudLayout();
 
@@ -66,6 +67,7 @@ public final class Config {
 	public boolean numericTimer()        { return numericTimer; }
 	public boolean showGraph()           { return showGraph; }
 	public void setShowGraph(boolean v)  { showGraph = v; save(); }
+	public boolean chatMultiplierButton() { return chatMultiplierButton; }
 	public HudLayout hudLayout()         { return hudLayout; }
 
 	public void toggleGamblingMode() { gamblingMode = !gamblingMode; save(); }
@@ -75,6 +77,7 @@ public final class Config {
 	public void toggleRakeback()     { rakebackEnabled = !rakebackEnabled; save(); }
 	public void toggleArrowGameSupport() { arrowGameSupport = !arrowGameSupport; save(); }
 	public void toggleNumericTimer()     { numericTimer = !numericTimer; save(); }
+	public void toggleChatMultiplierButton() { chatMultiplierButton = !chatMultiplierButton; save(); }
 
 	public void stepRakebackPct(int direction) {
 		int idx = 0;
@@ -153,6 +156,7 @@ public final class Config {
 			if (j.has("arrowGameSupport"))      arrowGameSupport      = j.get("arrowGameSupport").getAsBoolean();
 			if (j.has("numericTimer"))          numericTimer          = j.get("numericTimer").getAsBoolean();
 			if (j.has("showGraph"))             showGraph             = j.get("showGraph").getAsBoolean();
+			if (j.has("chatMultiplierButton")) chatMultiplierButton = j.get("chatMultiplierButton").getAsBoolean();
 			if (largePaymentThreshold < THRESHOLD_MIN) largePaymentThreshold = THRESHOLD_MIN;
 			if (largePaymentThreshold > THRESHOLD_MAX) largePaymentThreshold = THRESHOLD_MAX;
 
@@ -232,6 +236,7 @@ public final class Config {
 		j.addProperty("arrowGameSupport", arrowGameSupport);
 		j.addProperty("numericTimer", numericTimer);
 		j.addProperty("showGraph", showGraph);
+		j.addProperty("chatMultiplierButton", chatMultiplierButton);
 
 		JsonObject h = new JsonObject();
 		h.addProperty("auctionX", hudLayout.auctionX);

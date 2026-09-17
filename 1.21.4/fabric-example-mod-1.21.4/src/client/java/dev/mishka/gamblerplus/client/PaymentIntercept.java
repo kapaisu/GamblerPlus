@@ -27,7 +27,7 @@ public final class PaymentIntercept {
 			long amount = AmountFormat.parse(m.group(2));
 			if (amount <= 0) return true;
 			if (amount < config.largePaymentThreshold()) return true;
-			String recipient = m.group(1).replaceAll("[^A-Za-z0-9_]", "");
+			String recipient = m.group(1).replaceAll("[^A-Za-z0-9_.]", "");
 			if (recipient.isEmpty()) return true;
 			pending = new VerifyPaymentScreen(recipient, amount, command);
 			return false;

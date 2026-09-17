@@ -34,7 +34,7 @@ public final class PaymentParser {
 	}
 
 	private static String cleanName(String s) {
-		String r = s.replaceAll("[^A-Za-z0-9_]", "");
+		String r = s.replaceAll("[^A-Za-z0-9_.]", "");
 		if (r.length() > 32) r = r.substring(0, 32);
 		return r.isEmpty() ? "?" : r;
 	}

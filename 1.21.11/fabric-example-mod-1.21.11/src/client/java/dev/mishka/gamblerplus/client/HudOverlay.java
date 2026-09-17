@@ -8,6 +8,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.Identifier;
 
 public final class HudOverlay {
+	private static float hoverT = 0f;
+	private static long lastFrameNs = 0L;
+
 	private HudOverlay() {}
 
 	public static void register(Config config, Stats stats) {
@@ -32,45 +35,63 @@ public final class HudOverlay {
 
 	private static void drawBar(GuiGraphics ctx, Font font, Config config, Stats stats, int sw) {
 		long net = stats.sessionNet();
-		String label;
+		String amount;
 		if (config.hudDisplay() == Config.HudDisplay.PERCENT) {
 			double pct = stats.sessionProfitPct();
-			label = String.format("%s%.1f%%", pct > 0 ? "+" : "", pct);
+			amount = String.format("%s%.1f%%", pct > 0 ? "+" : "", pct);
 		} else {
-			label = AmountFormat.signed(net);
+			amount = AmountFormat.signed(net);
 		}
 
-		String tag = config.gamblingMode() ? "LIVE" : "PAUSED";
-		int tagW = font.width(tag);
+		String label = "LIVE";
+		int textColor = Theme.color(net);
 		int labelW = font.width(label);
-		int gap = 8;
-		int padX = 8;
+		int amountW = font.width(amount);
+		int padX = 10;
 		int padY = 5;
-		int contentW = tagW + gap + 1 + gap + labelW;
-		int w = contentW + padX * 2;
+		int gap = 10;
+		int w = padX + labelW + gap + amountW + padX;
 		int h = font.lineHeight + padY * 2;
 
-		int y = 4;
+		int y = 5;
 		int x = switch (config.hudAnchor()) {
-			case TOP_LEFT   -> 4;
+			case TOP_LEFT   -> 5;
 			case TOP_CENTER -> (sw - w) / 2;
-			case TOP_RIGHT  -> sw - w - 4;
+			case TOP_RIGHT  -> sw - w - 5;
 		};
 
-		ctx.fill(x, y, x + w, y + h, Theme.SURFACE);
-		ctx.fill(x, y, x + w, y + 1, Theme.PANEL_LINE);
-		ctx.fill(x, y + h - 1, x + w, y + h, Theme.PANEL_LINE);
-		ctx.fill(x, y, x + 1, y + h, Theme.PANEL_LINE);
-		ctx.fill(x + w - 1, y, x + w, y + h, Theme.PANEL_LINE);
+		Minecraft mc = Minecraft.getInstance();
+		var window = mc.getWindow();
+		double curX = mc.mouseHandler.getScaledXPos(window);
+		double curY = mc.mouseHandler.getScaledYPos(window);
+		boolean hovered = curX >= x && curX < x + w && curY >= y && curY < y + h;
 
-		int cursor = x + padX;
+		long now = System.nanoTime();
+		float dt = lastFrameNs == 0L ? 1f / 60f : Math.min(0.1f, (now - lastFrameNs) / 1_000_000_000f);
+		lastFrameNs = now;
+		float target = hovered ? 1f : 0f;
+		hoverT += (target - hoverT) * Math.min(1f, dt * 12f);
+		float t = Math.max(0f, Math.min(1f, hoverT));
+		float scale = 1f + 0.04f * t;
+
+		var pose = ctx.pose();
+		pose.pushMatrix();
+		float pcx = x + w / 2f;
+		float pcy = y + h / 2f;
+		pose.translate(pcx, pcy);
+		pose.scale(scale, scale);
+		pose.translate(-pcx, -pcy);
+
+		int bg = 0xB8000000;
+		ctx.fill(x, y + 1, x + w, y + h - 1, bg);
+		ctx.fill(x + 1, y, x + w - 1, y + 1, bg);
+		ctx.fill(x + 1, y + h - 1, x + w - 1, y + h, bg);
+
 		int textY = y + padY;
-		int tagColor = config.gamblingMode() ? Theme.GAIN : Theme.TEXT_DIM;
-		ctx.drawString(font, tag, cursor, textY, tagColor, false);
-		cursor += tagW + gap;
-		ctx.fill(cursor, y + 4, cursor + 1, y + h - 4, Theme.DIVIDER);
-		cursor += 1 + gap;
-		ctx.drawString(font, label, cursor, textY, Theme.color(net), false);
+		ctx.drawString(font, label, x + padX, textY, 0xFF8B8E96, false);
+		ctx.drawString(font, amount, x + padX + labelW + gap, textY, textColor, false);
+
+		pose.popMatrix();
 	}
 
 	private static void drawToast(GuiGraphics ctx, Font font, Stats stats, int sw) {

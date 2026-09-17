@@ -6,6 +6,9 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
 public final class HudOverlay {
+	private static float hoverT = 0f;
+	private static long lastFrameNs = 0L;
+
 	private HudOverlay() {}
 
 	public static void register(Config config, Stats stats) {
@@ -28,31 +31,51 @@ public final class HudOverlay {
 
 	private static void drawBar(GuiGraphics ctx, Font font, Config config, Stats stats, int sw) {
 		long net = stats.sessionNet();
-		String label;
+		String amount;
 		if (config.hudDisplay() == Config.HudDisplay.PERCENT) {
 			double pct = stats.sessionProfitPct();
-			label = String.format("%s%.1f%%", pct > 0 ? "+" : "", pct);
+			amount = String.format("%s%.1f%%", pct > 0 ? "+" : "", pct);
 		} else {
-			label = AmountFormat.signed(net);
+			amount = AmountFormat.signed(net);
 		}
-		String tag = config.gamblingMode() ? "LIVE" : "PAUSED";
-		int tagW = font.width(tag), labelW = font.width(label);
-		int contentW = tagW + 8 + 1 + 8 + labelW;
-		int w = contentW + 16, h = font.lineHeight + 10;
-		int y = 4;
-		int x = switch (config.hudAnchor()) { case TOP_LEFT -> 4; case TOP_CENTER -> (sw - w) / 2; case TOP_RIGHT -> sw - w - 4; };
-		ctx.fill(x, y, x + w, y + h, Theme.SURFACE);
-		ctx.fill(x, y, x + w, y + 1, Theme.PANEL_LINE);
-		ctx.fill(x, y + h - 1, x + w, y + h, Theme.PANEL_LINE);
-		ctx.fill(x, y, x + 1, y + h, Theme.PANEL_LINE);
-		ctx.fill(x + w - 1, y, x + w, y + h, Theme.PANEL_LINE);
-		int cursor = x + 8, textY = y + 5;
-		int tagColor = config.gamblingMode() ? Theme.GAIN : Theme.TEXT_DIM;
-		ctx.drawString(font, tag, cursor, textY, tagColor, false);
-		cursor += tagW + 8;
-		ctx.fill(cursor, y + 4, cursor + 1, y + h - 4, Theme.DIVIDER);
-		cursor += 9;
-		ctx.drawString(font, label, cursor, textY, Theme.color(net), false);
+		String label = "LIVE";
+		int textColor = Theme.color(net);
+		int labelW = font.width(label);
+		int amountW = font.width(amount);
+		int padX = 10;
+		int padY = 5;
+		int gap = 10;
+		int w = padX + labelW + gap + amountW + padX;
+		int h = font.lineHeight + padY * 2;
+		int y = 5;
+		int x = switch (config.hudAnchor()) { case TOP_LEFT -> 5; case TOP_CENTER -> (sw - w) / 2; case TOP_RIGHT -> sw - w - 5; };
+		Minecraft mc = Minecraft.getInstance();
+		var window = mc.getWindow();
+		double curX = mc.mouseHandler.xpos() * (double) window.getGuiScaledWidth()  / Math.max(1, window.getScreenWidth());
+		double curY = mc.mouseHandler.ypos() * (double) window.getGuiScaledHeight() / Math.max(1, window.getScreenHeight());
+		boolean hovered = curX >= x && curX < x + w && curY >= y && curY < y + h;
+		long now = System.nanoTime();
+		float dt = lastFrameNs == 0L ? 1f / 60f : Math.min(0.1f, (now - lastFrameNs) / 1_000_000_000f);
+		lastFrameNs = now;
+		float target = hovered ? 1f : 0f;
+		hoverT += (target - hoverT) * Math.min(1f, dt * 12f);
+		float t = Math.max(0f, Math.min(1f, hoverT));
+		float scale = 1f + 0.04f * t;
+		var pose = ctx.pose();
+		pose.pushPose();
+		float pcx = x + w / 2f;
+		float pcy = y + h / 2f;
+		pose.translate(pcx, pcy, 0f);
+		pose.scale(scale, scale, 1f);
+		pose.translate(-pcx, -pcy, 0f);
+		int bg = 0xB8000000;
+		ctx.fill(x, y + 1, x + w, y + h - 1, bg);
+		ctx.fill(x + 1, y, x + w - 1, y + 1, bg);
+		ctx.fill(x + 1, y + h - 1, x + w - 1, y + h, bg);
+		int textY = y + padY;
+		ctx.drawString(font, label, x + padX, textY, 0xFF8B8E96, false);
+		ctx.drawString(font, amount, x + padX + labelW + gap, textY, textColor, false);
+		pose.popPose();
 	}
 
 	private static void drawToast(GuiGraphics ctx, Font font, Stats stats, int sw) {
