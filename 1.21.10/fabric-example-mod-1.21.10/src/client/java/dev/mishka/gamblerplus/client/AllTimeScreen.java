@@ -9,28 +9,25 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class AllTimeScreen extends Screen {
 	public enum Sort {
-		NEWEST("newest first"),
-		OLDEST("oldest first"),
-		HIGH_LOW("highest first"),
-		LOW_HIGH("lowest first");
+		RECENT("most recent"),
+		NET_HIGH("best net"),
+		NET_LOW("worst net"),
+		VOLUME("most played");
 		final String label;
 		Sort(String s) { this.label = s; }
 	}
 
 	private static final int PANEL_W = 500;
 	private static final int PANEL_H = 320;
-	private static final int ROW_H = 14;
-	private static final DateTimeFormatter STAMP =
-			DateTimeFormatter.ofPattern("MMM d HH:mm").withZone(ZoneId.systemDefault());
+	private static final int ROW_H = 16;
 
 	private int px, py;
 	private float uiScale = 1f;
@@ -38,15 +35,25 @@ public final class AllTimeScreen extends Screen {
 
 	private String search = "";
 	private boolean searchFocused = false;
-	private Sort sort = Sort.NEWEST;
+	private Sort sort = Sort.RECENT;
 	private int scroll = 0;
+	private boolean resetArmed = false;
+	private long resetArmedAtMs = 0L;
 
 	private int[] closeRect;
+	private int[] resetRect;
 	private int[] searchRect;
 	private int[] sortRect;
 	private int listX, listTop, listBot, listW;
-	private final List<int[]> removeRects = new ArrayList<>();
-	private final List<PaymentEvent> rowRefs = new ArrayList<>();
+	private final List<int[]> rowRects = new ArrayList<>();
+	private final List<String> rowPlayers = new ArrayList<>();
+
+	private static final class PlayerAgg {
+		String player;
+		long net, in, out;
+		int wins, losses;
+		long lastTs;
+	}
 
 	public AllTimeScreen() {
 		super(Component.literal("All time"));
@@ -88,20 +95,41 @@ public final class AllTimeScreen extends Screen {
 		Widgets.flatButton(ctx, font, "close", cx, cy, cw, ch, mx, my, Theme.BRAND);
 		closeRect = new int[]{cx, cy, cx + cw, cy + ch};
 
+		if (resetArmed && System.currentTimeMillis() - resetArmedAtMs > 4000L) resetArmed = false;
+		String resetLabel = resetArmed ? "confirm reset?" : "reset all time";
+		int resetW = font.width(resetLabel) + 16;
+		int resetX = cx - resetW - 8;
+		Widgets.flatButton(ctx, font, resetLabel, resetX, cy, resetW, ch, mx, my, Theme.LOSS);
+		resetRect = new int[]{resetX, cy, resetX + resetW, cy + ch};
+
 		int barY = py + 32;
 		int barX = px + 12;
-		int searchW = 260;
+		int searchW = 220;
 		int searchH = 16;
 		Widgets.textField(ctx, font, barX, barY, searchW, searchH, search, searchFocused, "search player");
 		searchRect = new int[]{barX, barY, barX + searchW, barY + searchH};
 
 		int sortX = barX + searchW + 8;
-		int sortW = 140;
+		int sortW = 130;
 		Widgets.flatButton(ctx, font, "sort: " + sort.label, sortX, barY, sortW, searchH, mx, my, Theme.BRAND);
 		sortRect = new int[]{sortX, barY, sortX + sortW, barY + searchH};
 
+		List<PaymentEvent> all = GamblerPlusClient.ALLTIME.snapshot();
+		Map<String, PlayerAgg> byPlayer = new LinkedHashMap<>();
+		for (PaymentEvent p : all) {
+			PlayerAgg agg = byPlayer.computeIfAbsent(p.player(), k -> {
+				PlayerAgg a = new PlayerAgg();
+				a.player = k;
+				return a;
+			});
+			if (p.incoming()) { agg.in += p.amount(); agg.wins++; }
+			else { agg.out += p.amount(); agg.losses++; }
+			agg.net = agg.in - agg.out;
+			if (p.timestampMs() > agg.lastTs) agg.lastTs = p.timestampMs();
+		}
+
 		int countX = sortX + sortW + 8;
-		String countLabel = GamblerPlusClient.ALLTIME.size() + " events";
+		String countLabel = byPlayer.size() + " players";
 		ctx.drawString(font, countLabel, countX, barY + (searchH - font.lineHeight) / 2 + 1, Theme.TEXT_DIM, false);
 
 		listX = px + 8;
@@ -110,22 +138,20 @@ public final class AllTimeScreen extends Screen {
 		listBot = py + PANEL_H - 12;
 		Theme.roundPanel(ctx, listX, listTop, listX + listW, listBot, 4, Theme.SURFACE_ALT, Theme.PANEL_LINE);
 
-		List<PaymentEvent> all = GamblerPlusClient.ALLTIME.snapshot();
-		java.util.Map<PaymentEvent, String> multLabels = Multiplier.labelsFor(all);
 		String q = search.trim().toLowerCase();
-		List<PaymentEvent> filtered = new ArrayList<>();
-		for (PaymentEvent p : all) {
-			if (q.isEmpty() || p.player().toLowerCase().contains(q)) filtered.add(p);
+		List<PlayerAgg> filtered = new ArrayList<>();
+		for (PlayerAgg a : byPlayer.values()) {
+			if (q.isEmpty() || a.player.toLowerCase().contains(q)) filtered.add(a);
 		}
 		switch (sort) {
-			case NEWEST -> filtered.sort(Comparator.comparingLong(PaymentEvent::timestampMs).reversed());
-			case OLDEST -> filtered.sort(Comparator.comparingLong(PaymentEvent::timestampMs));
-			case HIGH_LOW -> filtered.sort(Comparator.comparingLong(PaymentEvent::amount).reversed());
-			case LOW_HIGH -> filtered.sort(Comparator.comparingLong(PaymentEvent::amount));
+			case RECENT   -> filtered.sort(Comparator.comparingLong((PlayerAgg a) -> a.lastTs).reversed());
+			case NET_HIGH -> filtered.sort(Comparator.comparingLong((PlayerAgg a) -> a.net).reversed());
+			case NET_LOW  -> filtered.sort(Comparator.comparingLong((PlayerAgg a) -> a.net));
+			case VOLUME   -> filtered.sort(Comparator.comparingLong((PlayerAgg a) -> a.in + a.out).reversed());
 		}
 
-		removeRects.clear();
-		rowRefs.clear();
+		rowRects.clear();
+		rowPlayers.clear();
 
 		if (filtered.isEmpty()) {
 			String s = q.isEmpty() ? "no payments yet" : "no matches for '" + search + "'";
@@ -144,31 +170,20 @@ public final class AllTimeScreen extends Screen {
 		int drawY = listTop + 4;
 		for (int i = scroll; i < filtered.size(); i++) {
 			if (drawY + ROW_H > listBot) break;
-			PaymentEvent p = filtered.get(i);
+			PlayerAgg a = filtered.get(i);
 			boolean rowHover = mx >= listX + 4 && mx < listX + listW - 4 && my >= drawY - 1 && my < drawY + ROW_H - 1;
 			if (rowHover) ctx.fill(listX + 2, drawY - 1, listX + listW - 2, drawY + ROW_H - 1, 0x14FFFFFF);
 
-			String time = STAMP.format(Instant.ofEpochMilli(p.timestampMs()));
-			String dir = p.incoming() ? "IN " : "OUT";
-			int dirColor = p.incoming() ? Theme.GAIN : Theme.LOSS;
-			String amt = (p.incoming() ? "+" : "-") + AmountFormat.pretty(p.amount());
-			int aw = font.width(amt);
+			int textY = drawY + (ROW_H - font.lineHeight) / 2;
+			ctx.drawString(font, a.player, listX + 8, textY, Theme.TEXT, false);
+			String rec = a.wins + "W / " + a.losses + "L";
+			ctx.drawString(font, rec, listX + 200, textY, Theme.TEXT_MUTED, false);
+			String netStr = AmountFormat.signed(a.net);
+			int nw = font.width(netStr);
+			ctx.drawString(font, netStr, listX + listW - 16 - nw, textY, Theme.color(a.net), false);
 
-			ctx.drawString(font, time, listX + 8, drawY, Theme.TEXT_DIM, false);
-			ctx.drawString(font, dir, listX + 76, drawY, dirColor, false);
-			ctx.drawString(font, p.player(), listX + 100, drawY, Theme.TEXT, false);
-			int xBtnX = listX + listW - 16;
-			int amtX = xBtnX - 8 - aw;
-			ctx.drawString(font, amt, amtX, drawY, dirColor, false);
-			String mult = multLabels.get(p);
-			if (mult != null) {
-				int mw = font.width(mult);
-				ctx.drawString(font, mult, amtX - mw - 4, drawY, Theme.WARN, false);
-			}
-			boolean xHover = mx >= xBtnX - 2 && mx < xBtnX + 10 && my >= drawY - 1 && my < drawY + ROW_H - 2;
-			ctx.drawString(font, "x", xBtnX, drawY, xHover ? Theme.LOSS : Theme.TEXT_DIM, false);
-			removeRects.add(new int[]{xBtnX - 2, drawY - 1, xBtnX + 10, drawY + ROW_H - 2});
-			rowRefs.add(p);
+			rowRects.add(new int[]{listX + 4, drawY - 1, listX + listW - 4, drawY + ROW_H - 1});
+			rowPlayers.add(a.player);
 			drawY += ROW_H;
 		}
 		ctx.disableScissor();
@@ -191,6 +206,18 @@ public final class AllTimeScreen extends Screen {
 		int mx = Math.round((float) event.x() / uiScale);
 		int my = Math.round((float) event.y() / uiScale);
 		if (hit(closeRect, mx, my)) { onClose(); return true; }
+		if (hit(resetRect, mx, my)) {
+			if (resetArmed) {
+				GamblerPlusClient.STATS.resetAllTime();
+				GamblerPlusClient.ALLTIME.clearAll();
+				GamblerPlusClient.CONFIG.save();
+				resetArmed = false;
+			} else {
+				resetArmed = true;
+				resetArmedAtMs = System.currentTimeMillis();
+			}
+			return true;
+		}
 		searchFocused = hit(searchRect, mx, my);
 		if (hit(sortRect, mx, my)) {
 			Sort[] all = Sort.values();
@@ -198,13 +225,9 @@ public final class AllTimeScreen extends Screen {
 			scroll = 0;
 			return true;
 		}
-		for (int i = 0; i < removeRects.size(); i++) {
-			if (hit(removeRects.get(i), mx, my)) {
-				PaymentEvent p = rowRefs.get(i);
-				boolean fromSession = GamblerPlusClient.STATS.remove(p);
-				if (!fromSession) GamblerPlusClient.STATS.reverseAllTime(p);
-				GamblerPlusClient.ALLTIME.removeOne(p);
-				GamblerPlusClient.CONFIG.save();
+		for (int i = 0; i < rowRects.size(); i++) {
+			if (hit(rowRects.get(i), mx, my)) {
+				Minecraft.getInstance().setScreenAndShow(new PlayerAllTimeScreen(rowPlayers.get(i)));
 				return true;
 			}
 		}

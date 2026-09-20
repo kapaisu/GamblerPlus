@@ -3,6 +3,7 @@ package dev.mishka.gamblerplus.client;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 
 public final class GamblerPlusClient implements ClientModInitializer {
@@ -57,6 +58,12 @@ public final class GamblerPlusClient implements ClientModInitializer {
 			CONFIG.save();
 			SESSIONS.save();
 			ALLTIME.save();
+		});
+
+		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+			if (CONFIG.gamblingMode() && !SESSIONS.hasActive()) {
+				SESSIONS.startNew(STATS);
+			}
 		});
 	}
 

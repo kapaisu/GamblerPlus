@@ -291,7 +291,7 @@ public final class TextScreen extends Screen {
 		}
 		for (int i = 0; i < entryRects.size(); i++) {
 			if (hit(entryRects.get(i), mx, my)) {
-				selected = i;
+				selected = listScroll + i;
 				textFocused = true;
 				return true;
 			}

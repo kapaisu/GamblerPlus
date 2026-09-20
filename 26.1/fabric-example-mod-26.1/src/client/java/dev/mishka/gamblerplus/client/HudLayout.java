@@ -6,6 +6,8 @@ import java.util.List;
 public final class HudLayout {
 	public static final float MIN_SCALE = 0.6f;
 	public static final float MAX_SCALE = 2.4f;
+	public static final float MIN_IMAGE_SCALE = 0.05f;
+	public static final float MAX_IMAGE_SCALE = 15f;
 
 	public int auctionX = 10;
 	public int auctionY = 40;
@@ -15,6 +17,14 @@ public final class HudLayout {
 	public int timerY = 130;
 	public float timerScale = 1.0f;
 
+	public int graphX = 10;
+	public int graphY = 150;
+	public float graphScale = 1.0f;
+
+	public int liveX = -1;
+	public int liveY = -1;
+	public float liveScale = 1.0f;
+
 	public final List<TextEntry> textEntries = new ArrayList<>();
 	public final List<ImageEntry> imageEntries = new ArrayList<>();
 
@@ -23,6 +33,12 @@ public final class HudLayout {
 	public static float clampScale(float v) {
 		if (v < MIN_SCALE) return MIN_SCALE;
 		if (v > MAX_SCALE) return MAX_SCALE;
+		return v;
+	}
+
+	public static float clampImageScale(float v) {
+		if (v < MIN_IMAGE_SCALE) return MIN_IMAGE_SCALE;
+		if (v > MAX_IMAGE_SCALE) return MAX_IMAGE_SCALE;
 		return v;
 	}
 

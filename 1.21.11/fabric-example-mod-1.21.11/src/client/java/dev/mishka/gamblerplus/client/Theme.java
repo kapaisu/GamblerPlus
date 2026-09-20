@@ -3,24 +3,35 @@ package dev.mishka.gamblerplus.client;
 import net.minecraft.client.gui.GuiGraphics;
 
 public final class Theme {
-	public static final int BG          = 0xF20E1014;
-	public static final int SURFACE     = 0xF216181D;
-	public static final int SURFACE_ALT = 0xF21B1E24;
+	private static final int BG_RGB          = 0x0E1014;
+	private static final int SURFACE_RGB     = 0x16181D;
+	private static final int SURFACE_ALT_RGB = 0x1B1E24;
+	private static final int HUD_BG_RGB      = 0x0E1014;
+	private static final int BASE_PANEL_A    = 0xF2;
+	private static final int BASE_HUD_A      = 0xE0;
+
+	private static final int TEXT_RGB_BASE       = 0xE6E7EB;
+	private static final int TEXT_MUTED_RGB_BASE = 0x7A8091;
+	private static final int TEXT_DIM_RGB_BASE   = 0x4D5361;
+
+	public static int BG          = 0xF2000000 | BG_RGB;
+	public static int SURFACE     = 0xF2000000 | SURFACE_RGB;
+	public static int SURFACE_ALT = 0xF2000000 | SURFACE_ALT_RGB;
 	public static final int PANEL_LINE  = 0xFF262A32;
 	public static final int DIVIDER     = 0xFF1F2229;
 	public static final int BG_SOLID    = 0xFF0E1014;
 	public static final int SURFACE_SOLID = 0xFF16181D;
-	public static final int HUD_BG      = 0xE00E1014;
+	public static int HUD_BG    = 0xE0000000 | HUD_BG_RGB;
 	public static final int HUD_EDGE    = 0xFF2B7BFF;
 
-	public static final int TEXT        = 0xFFE6E7EB;
-	public static final int TEXT_MUTED  = 0xFF7A8091;
-	public static final int TEXT_DIM    = 0xFF4D5361;
+	public static int TEXT        = 0xFF000000 | TEXT_RGB_BASE;
+	public static int TEXT_MUTED  = 0xFF000000 | TEXT_MUTED_RGB_BASE;
+	public static int TEXT_DIM    = 0xFF000000 | TEXT_DIM_RGB_BASE;
 
 	public static final int GAIN        = 0xFF4ADE80;
 	public static final int LOSS        = 0xFFEF4444;
 	public static final int WARN        = 0xFFF59E0B;
-	public static final int BRAND       = 0xFF2B7BFF;
+	public static int BRAND             = 0xFF2B7BFF;
 
 	public static final int TOGGLE_ON   = 0xFF4ADE80;
 	public static final int TOGGLE_OFF  = 0xFF3A3F4A;
@@ -30,6 +41,58 @@ public final class Theme {
 	public static final int TOAST_EDGE  = 0xFFEF4444;
 
 	private Theme() {}
+
+	public static void applyAccent(int r, int g, int b) {
+		int argb = 0xFF000000 | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+		BRAND = argb;
+		TEXT = lerpColor(0xFF000000 | TEXT_RGB_BASE, argb, 0.16f);
+		TEXT_MUTED = lerpColor(0xFF000000 | TEXT_MUTED_RGB_BASE, argb, 0.28f);
+		TEXT_DIM = lerpColor(0xFF000000 | TEXT_DIM_RGB_BASE, argb, 0.28f);
+	}
+
+	public static void applyOpacity(int panelAlpha) {
+		int a = Math.max(20, Math.min(255, panelAlpha));
+		int hudA = Math.max(20, a - 18);
+		BG = (a << 24) | BG_RGB;
+		SURFACE = (a << 24) | SURFACE_RGB;
+		SURFACE_ALT = (a << 24) | SURFACE_ALT_RGB;
+		HUD_BG = (hudA << 24) | HUD_BG_RGB;
+	}
+
+	public static int hsvToRgb(float h, float s, float v) {
+		h = h - (float) Math.floor(h);
+		int i = (int) (h * 6f);
+		float f = h * 6f - i;
+		float p = v * (1f - s);
+		float q = v * (1f - f * s);
+		float t = v * (1f - (1f - f) * s);
+		float r, g, b;
+		switch (i % 6) {
+			case 0 -> { r = v; g = t; b = p; }
+			case 1 -> { r = q; g = v; b = p; }
+			case 2 -> { r = p; g = v; b = t; }
+			case 3 -> { r = p; g = q; b = v; }
+			case 4 -> { r = t; g = p; b = v; }
+			default -> { r = v; g = p; b = q; }
+		}
+		int ri = Math.round(r * 255f), gi = Math.round(g * 255f), bi = Math.round(b * 255f);
+		return (ri << 16) | (gi << 8) | bi;
+	}
+
+	public static float[] rgbToHsv(int r, int g, int b) {
+		float rf = r / 255f, gf = g / 255f, bf = b / 255f;
+		float max = Math.max(rf, Math.max(gf, bf));
+		float min = Math.min(rf, Math.min(gf, bf));
+		float delta = max - min;
+		float h;
+		if (delta < 1e-6f) h = 0f;
+		else if (max == rf) h = (((gf - bf) / delta) % 6f) / 6f;
+		else if (max == gf) h = (((bf - rf) / delta) + 2f) / 6f;
+		else h = (((rf - gf) / delta) + 4f) / 6f;
+		if (h < 0f) h += 1f;
+		float s = max <= 0f ? 0f : delta / max;
+		return new float[]{h, s, max};
+	}
 
 	public static int color(long net) {
 		if (net > 0) return GAIN;

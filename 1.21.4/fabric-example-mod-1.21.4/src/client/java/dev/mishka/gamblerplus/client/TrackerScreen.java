@@ -268,6 +268,26 @@ public final class TrackerScreen extends Screen {
 		drawViewTab(ctx, "log", logTabX, tabY, tabW, tabH, !graphMode, mx, my, HitId.VIEW_LOG);
 		drawViewTab(ctx, "graph", graphTabX, tabY, tabW, tabH, graphMode, mx, my, HitId.VIEW_GRAPH);
 
+		if (graphMode) {
+			boolean hudOn = config.graphHudEnabled();
+			String popLabel = "pop out: " + (hudOn ? "on" : "off");
+			int popW = font.width(popLabel) + 14;
+			int popX = lx + font.width(header) + 10;
+			int popY = tabY;
+			Widgets.flatButton(ctx, font, popLabel, popX, popY, popW, tabH, mx, my, hudOn ? Theme.GAIN : Theme.TEXT_DIM);
+			hitboxes[HitId.POPOUT_GRAPH.ordinal()] = new int[]{popX, popY, popX + popW, popY + tabH};
+
+			String styleLabel = "style: " + (config.graphStyle() == Config.GraphStyle.CANDLES ? "candles" : "line");
+			int styleW = font.width(styleLabel) + 14;
+			int styleX = popX + popW + 6;
+			int styleY = tabY;
+			Widgets.flatButton(ctx, font, styleLabel, styleX, styleY, styleW, tabH, mx, my, Theme.BRAND);
+			hitboxes[HitId.GRAPH_STYLE.ordinal()] = new int[]{styleX, styleY, styleX + styleW, styleY + tabH};
+		} else {
+			hitboxes[HitId.POPOUT_GRAPH.ordinal()] = null;
+			hitboxes[HitId.GRAPH_STYLE.ordinal()] = null;
+		}
+
 		int ly = headerY + 12;
 		int lh = 108;
 
@@ -275,7 +295,7 @@ public final class TrackerScreen extends Screen {
 			List<PaymentEvent> snap = stats.snapshot();
 			long started = sessions.hasActive() ? sessions.currentStartedAt() : (snap.isEmpty() ? System.currentTimeMillis() - 1L : snap.get(snap.size() - 1).timestampMs());
 			long now = System.currentTimeMillis();
-			NetGraph.draw(ctx, font, lx, ly, lw, lh, snap, started, now, mx, my);
+			NetGraph.draw(ctx, font, lx, ly, lw, lh, snap, started, now, mx, my, config.graphStyle());
 			logRemoveHits.clear();
 			logRemoveRefs.clear();
 			return;
@@ -394,6 +414,12 @@ public final class TrackerScreen extends Screen {
 		int aY = row1Y - 1;
 		Widgets.flatButton(ctx, font, "all time", aX, aY, aW, aH, mx, my, Theme.BRAND);
 		hitboxes[HitId.OPEN_ALLTIME.ordinal()] = new int[]{aX, aY, aX + aW, aY + aH};
+
+		int tW = 66, tH = 16;
+		int tX = aX - tW - 6;
+		int tY = row1Y - 1;
+		Widgets.flatButton(ctx, font, "themes", tX, tY, tW, tH, mx, my, Theme.BRAND);
+		hitboxes[HitId.OPEN_THEMES.ordinal()] = new int[]{tX, tY, tX + tW, tY + tH};
 	}
 
 	private void drawSessionsPanel(GuiGraphics ctx, int mx, int my) {
@@ -721,10 +747,13 @@ public final class TrackerScreen extends Screen {
 		RAKEBACK_ENABLE, RATE_DOWN, RATE_UP, OPEN_RAKEBACK,
 		OPEN_USEFUL,
 		OPEN_ALLTIME,
+		OPEN_THEMES,
 		OPEN_DISCORD,
 		ARROW_GAME,
 		VIEW_LOG,
-		VIEW_GRAPH
+		VIEW_GRAPH,
+		POPOUT_GRAPH,
+		GRAPH_STYLE
 	}
 	private static final int DISCORD_BLURPLE = 0xFF5865F2;
 	private static final String DISCORD_URL = "https://discord.gg/YnMQRpExwj";
@@ -808,8 +837,11 @@ public final class TrackerScreen extends Screen {
 					case OPEN_RAKEBACK  -> Minecraft.getInstance().setScreen(new RakebackScreen(config, sessions));
 					case OPEN_USEFUL    -> Minecraft.getInstance().setScreen(new UsefulScreen());
 					case OPEN_ALLTIME   -> Minecraft.getInstance().setScreen(new AllTimeScreen());
+					case OPEN_THEMES    -> Minecraft.getInstance().setScreen(new ThemesScreen());
 					case VIEW_LOG       -> config.setShowGraph(false);
 					case VIEW_GRAPH     -> config.setShowGraph(true);
+					case POPOUT_GRAPH   -> config.toggleGraphHudEnabled();
+					case GRAPH_STYLE    -> config.cycleGraphStyle();
 					case OPEN_DISCORD   -> Util.getPlatform().openUri(URI.create(DISCORD_URL));
 					case ARROW_GAME     -> config.toggleArrowGameSupport();
 					case CURRENT_SESSION_DETAIL -> Minecraft.getInstance().setScreen(

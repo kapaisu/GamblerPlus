@@ -29,6 +29,11 @@ public final class AllTimeLog {
 		save();
 	}
 
+	public synchronized void clearAll() {
+		events.clear();
+		save();
+	}
+
 	public synchronized boolean removeOne(PaymentEvent e) {
 		for (int i = 0; i < events.size(); i++) {
 			PaymentEvent x = events.get(i);

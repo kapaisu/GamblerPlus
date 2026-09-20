@@ -39,8 +39,17 @@ public final class NetGraph {
 	public static void draw(GuiGraphicsExtractor ctx, Font font,
 	                        int x, int y, int w, int h,
 	                        List<PaymentEvent> log, long startedAtMs, long nowMs,
-	                        int mx, int my) {
-		Theme.roundPanel(ctx, x, y, x + w, y + h, 4, Theme.SURFACE_ALT, Theme.PANEL_LINE);
+	                        int mx, int my, Config.GraphStyle style) {
+		draw(ctx, font, x, y, w, h, log, startedAtMs, nowMs, mx, my, style, true);
+	}
+
+	public static void draw(GuiGraphicsExtractor ctx, Font font,
+	                        int x, int y, int w, int h,
+	                        List<PaymentEvent> log, long startedAtMs, long nowMs,
+	                        int mx, int my, Config.GraphStyle style, boolean drawPanel) {
+		if (drawPanel) {
+			Theme.roundPanel(ctx, x, y, x + w, y + h, 4, Theme.SURFACE_ALT, Theme.PANEL_LINE);
+		}
 
 		if (log.isEmpty()) {
 			String s = "no payments yet";
@@ -168,21 +177,27 @@ public final class NetGraph {
 			}
 		}
 
+		if (style == Config.GraphStyle.LINE) {
+			drawSmoothLine(ctx, chartX, chartY, chartH, cellW, candleW, closes, viewMin, vr, numCandles);
+		}
+
 		int hoverBucket = -1;
 		for (int b = 0; b < numCandles; b++) {
 			int cx = chartX + b * cellW;
-			int oy = chartY + chartH - (int) (((opens[b] - viewMin) * (long) chartH) / vr);
-			int cy = chartY + chartH - (int) (((closes[b] - viewMin) * (long) chartH) / vr);
-			int hy = chartY + chartH - (int) (((highs[b] - viewMin) * (long) chartH) / vr);
-			int ly = chartY + chartH - (int) (((lows[b] - viewMin) * (long) chartH) / vr);
-			boolean up = closes[b] >= opens[b];
-			int col = up ? Theme.GAIN : Theme.LOSS;
-			int wickX = cx + candleW / 2;
-			ctx.fill(wickX, hy, wickX + 1, ly + 1, col);
-			int bodyTop = Math.min(oy, cy);
-			int bodyBot = Math.max(oy, cy);
-			if (bodyBot - bodyTop < 1) bodyBot = bodyTop + 1;
-			ctx.fill(cx, bodyTop, cx + candleW, bodyBot, col);
+			if (style == Config.GraphStyle.CANDLES) {
+				int oy = chartY + chartH - (int) (((opens[b] - viewMin) * (long) chartH) / vr);
+				int cy = chartY + chartH - (int) (((closes[b] - viewMin) * (long) chartH) / vr);
+				int hy = chartY + chartH - (int) (((highs[b] - viewMin) * (long) chartH) / vr);
+				int ly = chartY + chartH - (int) (((lows[b] - viewMin) * (long) chartH) / vr);
+				boolean up = closes[b] >= opens[b];
+				int col = up ? Theme.GAIN : Theme.LOSS;
+				int wickX = cx + candleW / 2;
+				ctx.fill(wickX, hy, wickX + 1, ly + 1, col);
+				int bodyTop = Math.min(oy, cy);
+				int bodyBot = Math.max(oy, cy);
+				if (bodyBot - bodyTop < 1) bodyBot = bodyTop + 1;
+				ctx.fill(cx, bodyTop, cx + candleW, bodyBot, col);
+			}
 			if (mx >= cx && mx < cx + cellW && my >= y && my < y + h) {
 				hoverBucket = b;
 			}
@@ -217,5 +232,66 @@ public final class NetGraph {
 			ctx.text(font, loStr,    tx + 5, ty + 4 + font.lineHeight * 3, Theme.LOSS, false);
 			ctx.text(font, closeStr, tx + 5, ty + 4 + font.lineHeight * 4, trend, false);
 		}
+	}
+
+	private static void drawSmoothLine(GuiGraphicsExtractor ctx, int chartX, int chartY, int chartH,
+	                                   int cellW, int candleW, long[] closes, long viewMin, long vr, int numCandles) {
+		int[] xs = new int[numCandles];
+		float[] ys = new float[numCandles];
+		for (int b = 0; b < numCandles; b++) {
+			xs[b] = chartX + b * cellW + candleW / 2;
+			ys[b] = chartY + chartH - (((closes[b] - viewMin) * (float) chartH) / vr);
+		}
+		if (numCandles == 1) {
+			drawAADot(ctx, xs[0], ys[0], Theme.BRAND);
+			return;
+		}
+
+		int startX = xs[0];
+		int endX = xs[numCandles - 1];
+		int seg = 0;
+		float prevY = ys[0];
+		for (int x = startX; x <= endX; x++) {
+			while (seg < numCandles - 2 && x >= xs[seg + 1]) seg++;
+			int p0 = Math.max(0, seg - 1);
+			int p1 = seg;
+			int p2 = Math.min(numCandles - 1, seg + 1);
+			int p3 = Math.min(numCandles - 1, seg + 2);
+			int span = Math.max(1, xs[p2] - xs[p1]);
+			float t = Math.max(0f, Math.min(1f, (x - xs[p1]) / (float) span));
+			float y = catmullRom(ys[p0], ys[p1], ys[p2], ys[p3], t);
+			int col = y <= prevY ? Theme.GAIN : Theme.LOSS;
+			drawAAColumn(ctx, x, prevY, y, col);
+			prevY = y;
+		}
+	}
+
+	private static void drawAADot(GuiGraphicsExtractor ctx, int x, float yf, int color) {
+		int y = Math.round(yf);
+		ctx.fill(x - 1, y - 1, x + 1, y + 1, color);
+	}
+
+	private static void drawAAColumn(GuiGraphicsExtractor ctx, int x, float y0, float y1, int color) {
+		float top = Math.min(y0, y1);
+		float bot = Math.max(y0, y1);
+		if (bot - top < 1.2f) {
+			float mid = (y0 + y1) / 2f;
+			top = mid - 0.6f;
+			bot = mid + 0.6f;
+		}
+		int topI = (int) Math.floor(top);
+		int botI = (int) Math.ceil(bot);
+		for (int py = topI; py < botI; py++) {
+			float overlap = Math.min(bot, py + 1f) - Math.max(top, (float) py);
+			if (overlap <= 0f) continue;
+			float coverage = Math.min(1f, overlap);
+			ctx.fill(x, py, x + 1, py + 1, Theme.scaleAlpha(color, coverage));
+		}
+	}
+
+	private static float catmullRom(float p0, float p1, float p2, float p3, float t) {
+		float t2 = t * t;
+		float t3 = t2 * t;
+		return 0.5f * ((2f * p1) + (-p0 + p2) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
 	}
 }

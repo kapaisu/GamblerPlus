@@ -21,6 +21,7 @@ public final class ChatListener {
 			long sameAmt = ev.amount();
 			String doubleCmd = "/gplus2x " + ev.player() + " " + doubleAmt;
 			String sameCmd = "/gplus2x " + ev.player() + " " + sameAmt;
+			String balCmd = "/bal " + ev.player();
 			Component doubleBtn = Component.literal(" [2x]").setStyle(
 					Style.EMPTY
 							.withColor(ChatFormatting.GOLD)
@@ -35,7 +36,14 @@ public final class ChatListener {
 							.withClickEvent(new ClickEvent.RunCommand(sameCmd))
 							.withHoverEvent(new HoverEvent.ShowText(Component.literal("click to pay " + AmountFormat.pretty(sameAmt) + " back")))
 			);
-			return message.copy().append(doubleBtn).append(paybackBtn);
+			Component balBtn = Component.literal(" [bal]").setStyle(
+					Style.EMPTY
+							.withColor(ChatFormatting.LIGHT_PURPLE)
+							.withBold(true)
+							.withClickEvent(new ClickEvent.RunCommand(balCmd))
+							.withHoverEvent(new HoverEvent.ShowText(Component.literal("click to check " + ev.player() + "'s balance")))
+			);
+			return message.copy().append(doubleBtn).append(paybackBtn).append(balBtn);
 		});
 
 		ClientReceiveMessageEvents.GAME.register((message, overlay) -> {

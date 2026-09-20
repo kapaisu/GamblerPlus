@@ -3,14 +3,20 @@ package dev.mishka.gamblerplus.client;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FontDescription;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+import net.minecraft.resources.Identifier;
 
 public final class TextHud {
+	private static final FontDescription NERD_FONT =
+			new FontDescription.Resource(Identifier.fromNamespaceAndPath("gamblerplus", "nerd"));
+
 	public static final String[] FONT_NAMES = {
 			"regular", "bold", "italic", "bold italic",
 			"underlined", "bold underlined", "italic underlined", "strikethrough",
-			"bold strikethrough", "obfuscated"
+			"bold strikethrough", "obfuscated",
+			"nerd font", "nerd font bold", "nerd font italic", "nerd font bold italic"
 	};
 	private static final int MIN_W = 40;
 
@@ -27,6 +33,10 @@ public final class TextHud {
 			case 7 -> Style.EMPTY.withStrikethrough(true);
 			case 8 -> Style.EMPTY.withBold(true).withStrikethrough(true);
 			case 9 -> Style.EMPTY.withObfuscated(true);
+			case 10 -> Style.EMPTY.withFont(NERD_FONT);
+			case 11 -> Style.EMPTY.withFont(NERD_FONT).withBold(true);
+			case 12 -> Style.EMPTY.withFont(NERD_FONT).withItalic(true);
+			case 13 -> Style.EMPTY.withFont(NERD_FONT).withBold(true).withItalic(true);
 			default -> Style.EMPTY;
 		};
 	}

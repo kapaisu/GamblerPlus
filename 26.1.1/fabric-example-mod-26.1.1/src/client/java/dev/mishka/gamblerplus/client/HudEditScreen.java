@@ -9,7 +9,7 @@ import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 public final class HudEditScreen extends Screen {
-	private enum TargetKind { NONE, AUCTION, TIMER, TEXT, IMAGE }
+	private enum TargetKind { NONE, AUCTION, TIMER, GRAPH, LIVE, TEXT, IMAGE }
 
 	private TargetKind dragKind = TargetKind.NONE;
 	private int dragTextIndex = -1;
@@ -35,9 +35,12 @@ public final class HudEditScreen extends Screen {
 		long window = mc.getWindow().handle();
 		boolean down = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
 
+		int[] liveR = HudOverlay.barBounds(GamblerPlusClient.CONFIG, GamblerPlusClient.STATS, this.font, width);
+
 		if (down && dragKind == TargetKind.NONE && !prevMouseDown) {
 			int[] a = AuctionHud.bounds(layout);
 			int[] tR = TimerHud.bounds(layout);
+			int[] gR = GraphHud.bounds(layout);
 			if (inRect(mx, my, a)) {
 				dragKind = TargetKind.AUCTION;
 				dragOffX = mx - layout.auctionX;
@@ -46,6 +49,16 @@ public final class HudEditScreen extends Screen {
 				dragKind = TargetKind.TIMER;
 				dragOffX = mx - layout.timerX;
 				dragOffY = my - layout.timerY;
+			} else if (inRect(mx, my, gR)) {
+				dragKind = TargetKind.GRAPH;
+				dragOffX = mx - layout.graphX;
+				dragOffY = my - layout.graphY;
+			} else if (inRect(mx, my, liveR)) {
+				dragKind = TargetKind.LIVE;
+				int baseX = layout.liveX >= 0 ? layout.liveX : liveR[0];
+				int baseY = layout.liveY >= 0 ? layout.liveY : liveR[1];
+				dragOffX = mx - baseX;
+				dragOffY = my - baseY;
 			} else {
 				boolean grabbed = false;
 				for (int i = 0; i < layout.textEntries.size(); i++) {
@@ -85,6 +98,8 @@ public final class HudEditScreen extends Screen {
 			switch (dragKind) {
 				case AUCTION -> { layout.auctionX = nx; layout.auctionY = ny; }
 				case TIMER   -> { layout.timerX   = nx; layout.timerY   = ny; }
+				case GRAPH   -> { layout.graphX   = nx; layout.graphY   = ny; }
+				case LIVE    -> { layout.liveX    = nx; layout.liveY    = ny; }
 				case TEXT -> {
 					if (dragTextIndex >= 0 && dragTextIndex < layout.textEntries.size()) {
 						HudLayout.TextEntry e = layout.textEntries.get(dragTextIndex);
@@ -113,6 +128,8 @@ public final class HudEditScreen extends Screen {
 		ImageHud.drawAll(ctx, font, layout, true);
 		AuctionHud.draw(ctx, font, layout, true);
 		TimerHud.draw(ctx, font, layout, true);
+		GraphHud.draw(ctx, font, layout, GamblerPlusClient.CONFIG, GamblerPlusClient.STATS, true);
+		HudOverlay.drawBar(ctx, font, GamblerPlusClient.CONFIG, GamblerPlusClient.STATS, width, true);
 		TextHud.drawAll(ctx, font, layout, true);
 
 		String hint = "drag to move  |  scroll while hovering to resize  |  esc to finish";
@@ -127,6 +144,8 @@ public final class HudEditScreen extends Screen {
 		HudLayout layout = GamblerPlusClient.CONFIG.hudLayout();
 		int[] a = AuctionHud.bounds(layout);
 		int[] t = TimerHud.bounds(layout);
+		int[] g = GraphHud.bounds(layout);
+		int[] liveR = HudOverlay.barBounds(GamblerPlusClient.CONFIG, GamblerPlusClient.STATS, this.font, width);
 		float step = vy > 0 ? 0.05f : -0.05f;
 		if (inRect(mx, my, a)) {
 			layout.auctionScale = HudLayout.clampScale(layout.auctionScale + step);
@@ -135,6 +154,16 @@ public final class HudEditScreen extends Screen {
 		}
 		if (inRect(mx, my, t)) {
 			layout.timerScale = HudLayout.clampScale(layout.timerScale + step);
+			GamblerPlusClient.CONFIG.save();
+			return true;
+		}
+		if (inRect(mx, my, g)) {
+			layout.graphScale = HudLayout.clampScale(layout.graphScale + step);
+			GamblerPlusClient.CONFIG.save();
+			return true;
+		}
+		if (inRect(mx, my, liveR)) {
+			layout.liveScale = HudLayout.clampScale(layout.liveScale + step);
 			GamblerPlusClient.CONFIG.save();
 			return true;
 		}
@@ -149,7 +178,8 @@ public final class HudEditScreen extends Screen {
 		for (HudLayout.ImageEntry ie : layout.imageEntries) {
 			int[] eR = ImageHud.bounds(ie);
 			if (inRect(mx, my, eR)) {
-				ie.scale = HudLayout.clampScale(ie.scale + step);
+				float mul = vy > 0 ? 1.1f : (1f / 1.1f);
+				ie.scale = HudLayout.clampImageScale(ie.scale * mul);
 				GamblerPlusClient.CONFIG.save();
 				return true;
 			}

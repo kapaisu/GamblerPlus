@@ -16,6 +16,7 @@ import java.nio.file.Path;
 public final class Config {
 	public enum HudDisplay { AMOUNT, PERCENT }
 	public enum HudAnchor  { TOP_LEFT, TOP_CENTER, TOP_RIGHT }
+	public enum GraphStyle { CANDLES, LINE }
 
 	public static final long THRESHOLD_MIN = 1_000L;
 	public static final long THRESHOLD_MAX = 10_000_000_000L;
@@ -40,6 +41,12 @@ public final class Config {
 	private boolean numericTimer = false;
 	private boolean showGraph = false;
 	private boolean chatMultiplierButton = true;
+	private boolean graphHudEnabled = false;
+	private int themeR = 0x2B;
+	private int themeG = 0x7B;
+	private int themeB = 0xFF;
+	private int guiAlpha = 0xF2;
+	private GraphStyle graphStyle = GraphStyle.CANDLES;
 
 	private final HudLayout hudLayout = new HudLayout();
 
@@ -68,7 +75,33 @@ public final class Config {
 	public boolean showGraph()           { return showGraph; }
 	public void setShowGraph(boolean v)  { showGraph = v; save(); }
 	public boolean chatMultiplierButton() { return chatMultiplierButton; }
+	public boolean graphHudEnabled() { return graphHudEnabled; }
+	public void toggleGraphHudEnabled() { graphHudEnabled = !graphHudEnabled; save(); }
+	public int themeR() { return themeR; }
+	public int themeG() { return themeG; }
+	public int themeB() { return themeB; }
+	public int guiAlpha() { return guiAlpha; }
+	public GraphStyle graphStyle() { return graphStyle; }
 	public HudLayout hudLayout()         { return hudLayout; }
+
+	public void setTheme(int r, int g, int b) {
+		themeR = HudLayout.clampByte(r);
+		themeG = HudLayout.clampByte(g);
+		themeB = HudLayout.clampByte(b);
+		Theme.applyAccent(themeR, themeG, themeB);
+		save();
+	}
+
+	public void setGuiAlpha(int a) {
+		guiAlpha = Math.max(20, Math.min(255, a));
+		Theme.applyOpacity(guiAlpha);
+		save();
+	}
+
+	public void cycleGraphStyle() {
+		graphStyle = graphStyle == GraphStyle.CANDLES ? GraphStyle.LINE : GraphStyle.CANDLES;
+		save();
+	}
 
 	public void toggleGamblingMode() { gamblingMode = !gamblingMode; save(); }
 	public void toggleHudBar()       { hudBar = !hudBar; save(); }
@@ -139,7 +172,14 @@ public final class Config {
 	}
 
 	public void load() {
-		if (!Files.exists(file)) { save(); return; }
+		boolean existed = Files.exists(file);
+		if (existed) loadFromDisk();
+		Theme.applyAccent(themeR, themeG, themeB);
+		Theme.applyOpacity(guiAlpha);
+		if (!existed) save();
+	}
+
+	private void loadFromDisk() {
 		try (Reader r = Files.newBufferedReader(file)) {
 			JsonObject j = JsonParser.parseReader(r).getAsJsonObject();
 			if (j.has("gamblingMode"))    gamblingMode    = j.get("gamblingMode").getAsBoolean();
@@ -157,6 +197,12 @@ public final class Config {
 			if (j.has("numericTimer"))          numericTimer          = j.get("numericTimer").getAsBoolean();
 			if (j.has("showGraph"))             showGraph             = j.get("showGraph").getAsBoolean();
 			if (j.has("chatMultiplierButton")) chatMultiplierButton = j.get("chatMultiplierButton").getAsBoolean();
+			if (j.has("graphHudEnabled")) graphHudEnabled = j.get("graphHudEnabled").getAsBoolean();
+			if (j.has("themeR")) themeR = HudLayout.clampByte(j.get("themeR").getAsInt());
+			if (j.has("themeG")) themeG = HudLayout.clampByte(j.get("themeG").getAsInt());
+			if (j.has("themeB")) themeB = HudLayout.clampByte(j.get("themeB").getAsInt());
+			if (j.has("guiAlpha")) guiAlpha = Math.max(20, Math.min(255, j.get("guiAlpha").getAsInt()));
+			if (j.has("graphStyle")) graphStyle = GraphStyle.valueOf(j.get("graphStyle").getAsString());
 			if (largePaymentThreshold < THRESHOLD_MIN) largePaymentThreshold = THRESHOLD_MIN;
 			if (largePaymentThreshold > THRESHOLD_MAX) largePaymentThreshold = THRESHOLD_MAX;
 
@@ -168,6 +214,12 @@ public final class Config {
 				if (h.has("timerX")) hudLayout.timerX = h.get("timerX").getAsInt();
 				if (h.has("timerY")) hudLayout.timerY = h.get("timerY").getAsInt();
 				if (h.has("timerScale")) hudLayout.timerScale = HudLayout.clampScale(h.get("timerScale").getAsFloat());
+				if (h.has("graphX")) hudLayout.graphX = h.get("graphX").getAsInt();
+				if (h.has("graphY")) hudLayout.graphY = h.get("graphY").getAsInt();
+				if (h.has("graphScale")) hudLayout.graphScale = HudLayout.clampScale(h.get("graphScale").getAsFloat());
+				if (h.has("liveX")) hudLayout.liveX = h.get("liveX").getAsInt();
+				if (h.has("liveY")) hudLayout.liveY = h.get("liveY").getAsInt();
+				if (h.has("liveScale")) hudLayout.liveScale = HudLayout.clampScale(h.get("liveScale").getAsFloat());
 				hudLayout.imageEntries.clear();
 				if (h.has("imageEntries")) {
 					JsonArray arr = h.getAsJsonArray("imageEntries");
@@ -177,7 +229,7 @@ public final class Config {
 						if (o.has("file")) ie.file = o.get("file").getAsString();
 						if (o.has("x")) ie.x = o.get("x").getAsInt();
 						if (o.has("y")) ie.y = o.get("y").getAsInt();
-						if (o.has("scale")) ie.scale = HudLayout.clampScale(o.get("scale").getAsFloat());
+						if (o.has("scale")) ie.scale = HudLayout.clampImageScale(o.get("scale").getAsFloat());
 						hudLayout.imageEntries.add(ie);
 					}
 				}
@@ -237,6 +289,12 @@ public final class Config {
 		j.addProperty("numericTimer", numericTimer);
 		j.addProperty("showGraph", showGraph);
 		j.addProperty("chatMultiplierButton", chatMultiplierButton);
+		j.addProperty("graphHudEnabled", graphHudEnabled);
+		j.addProperty("themeR", themeR);
+		j.addProperty("themeG", themeG);
+		j.addProperty("themeB", themeB);
+		j.addProperty("guiAlpha", guiAlpha);
+		j.addProperty("graphStyle", graphStyle.name());
 
 		JsonObject h = new JsonObject();
 		h.addProperty("auctionX", hudLayout.auctionX);
@@ -245,6 +303,12 @@ public final class Config {
 		h.addProperty("timerX", hudLayout.timerX);
 		h.addProperty("timerY", hudLayout.timerY);
 		h.addProperty("timerScale", hudLayout.timerScale);
+		h.addProperty("graphX", hudLayout.graphX);
+		h.addProperty("graphY", hudLayout.graphY);
+		h.addProperty("graphScale", hudLayout.graphScale);
+		h.addProperty("liveX", hudLayout.liveX);
+		h.addProperty("liveY", hudLayout.liveY);
+		h.addProperty("liveScale", hudLayout.liveScale);
 		JsonArray entries = new JsonArray();
 		for (HudLayout.TextEntry t : hudLayout.textEntries) {
 			JsonObject e = new JsonObject();
