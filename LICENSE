@@ -1,0 +1,71 @@
+Copyright © 2026 GamblerPlus. All rights reserved.
+
+GamblerPlus is open-source software. The source code is made available under the terms below.
+
+1. Permission
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of the GamblerPlus source code and associated files (the "Software"), to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, subject to the conditions below.
+
+2. Copyright Notice
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+3. Name and Branding
+
+The name "GamblerPlus", the GamblerPlus logo, official artwork, branding, and other identifiers associated with the official GamblerPlus project are not granted under this license.
+
+You may modify, fork, and redistribute the Software, but you may not:
+
+Publish a modified or forked version using the name "GamblerPlus".
+Use "GamblerPlus" as the primary name of a fork or derivative project.
+Use GamblerPlus branding, logos, artwork, or other official identifiers in a way that suggests the project is official.
+Represent a modified or forked version as an official release of GamblerPlus.
+Create a project that falsely suggests endorsement, sponsorship, or affiliation with the official GamblerPlus project.
+
+Forks and modified versions must use a different project name and should clearly indicate that they are unofficial modifications or forks.
+
+4. Official Releases
+
+Only releases published through the official GamblerPlus distribution channels or by authorized maintainers may be represented as official GamblerPlus releases.
+
+A fork may retain attribution to the original GamblerPlus project, but must not present itself as the official project.
+
+5. Attribution
+
+If you redistribute a modified or unmodified version of the Software, you must retain the original copyright notice and license.
+
+You may additionally provide attribution to the original GamblerPlus project.
+
+6. Takedown and Enforcement
+
+If a project uses the name "GamblerPlus" or GamblerPlus branding in violation of this license or applicable trademark rights, the GamblerPlus project maintainers reserve the right to request removal of the infringing project from hosting platforms, repositories, distribution services, or other platforms.
+
+This may include requests to Modrinth, GitHub, CurseForge, or other applicable platforms.
+
+7. No Ownership Transfer
+
+This license does not transfer ownership of the GamblerPlus name, trademarks, branding, logos, or other intellectual property.
+
+The source code remains available under this open-source license, while the GamblerPlus name and branding remain reserved.
+
+8. Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+9. Summary
+
+In simple terms:
+
+You may use GamblerPlus source code.
+You may modify it.
+You may fork it.
+You may redistribute your fork.
+You may use it in your own project.
+You may not call your fork "GamblerPlus".
+You may not use GamblerPlus branding to make your fork appear official.
+You may not claim your fork is an official GamblerPlus release.
+Official GamblerPlus branding and identity remain reserved.
+
+Copyright © 2026 GamblerPlus. All rights reserved except where rights are expressly granted by this license.
